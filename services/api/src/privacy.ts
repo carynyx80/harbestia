@@ -21,8 +21,10 @@ export interface SumProvider {
   seed(campaignId: string, total: number): void;
 }
 
+export type ProofKind = "invest" | "vote" | "payoutClaim" | "tokenClaim";
+
 export interface ProofVerifier {
-  verify(kind: "invest" | "vote", proof: string, publicInputs: Record<string, string>): Promise<boolean>;
+  verify(kind: ProofKind, proof: string, publicInputs: Record<string, string>): Promise<boolean>;
 }
 
 // ---------------- Mock implementations ----------------
@@ -70,7 +72,31 @@ export class MockArciumTally implements TallyProvider {
 }
 
 export class MockProofVerifier implements ProofVerifier {
-  async verify(_kind: "invest" | "vote", proof: string) {
+  async verify(_kind: ProofKind, proof: string) {
     return typeof proof === "string" && proof.startsWith("mockproof:") && proof.length >= 14;
+  }
+}
+
+/**
+ * Private claim math (Arcium MPC in production): reads a position's hidden stake from its
+ * investment ciphertext and returns the claim amount encrypted for the investor.
+ */
+export interface ClaimProvider {
+  readonly name: string;
+  /** Hidden stake (shares) of a position. Never returned to API callers. */
+  sharesOf(investCiphertext: string): Promise<number>;
+  /** Encrypt a claim amount for the investor. */
+  sealClaim(amount: number, unit: string): Promise<string>;
+}
+
+export class MockArciumClaims implements ClaimProvider {
+  readonly name = "mock-arcium-claims";
+  async sharesOf(investCiphertext: string) {
+    const { amountUsdc } = mpcDecrypt<{ amountUsdc: number }>(investCiphertext);
+    if (!Number.isFinite(amountUsdc) || amountUsdc <= 0) throw new Error("invalid position");
+    return Math.floor(amountUsdc);
+  }
+  async sealClaim(amount: number, unit: string) {
+    return PREFIX + Buffer.from(JSON.stringify({ amount, unit }), "utf8").toString("base64");
   }
 }

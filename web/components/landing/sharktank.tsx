@@ -2,7 +2,7 @@ import { Check, Minus } from "lucide-react";
 import { SectionHead, Serif } from "@/components/ui/reveal";
 
 const beats = [
-  { step: "The pitch", title: "Founders step into the tank", body: "Any crypto project pitches in public: the product, the ask, the milestones, and the faces behind it. No anon teams." },
+  { step: "The pitch", title: "Founders step into the tank", body: "Any startup pitches in public, from bakeries to blockchains: the product, the ask, the milestones, and the faces behind it. No anon teams." },
   { step: "The sharks", title: "Investors stay in the dark", body: "Anyone can be a shark. Who you are, how much you put in and how you vote stay encrypted. No whale-watching, no copy-trading." },
   { step: "The deal", title: "Money moves only when they deliver", body: "Funds sit in a safe on Solana. Each milestone unlocks a slice after a private investor vote. Miss one and the rest comes back to you." },
 ];
@@ -30,7 +30,7 @@ export function SharkTank() {
       <SectionHead
         num="01"
         eyebrow="Shark Tank, onchain"
-        title={<>Shark Tank for crypto. <Serif>Minus the cameras</Serif> on the sharks.</>}
+        title={<>Shark Tank for every startup. <Serif>Minus the cameras</Serif> on the sharks.</>}
         sub="Founders pitch anything they're building. Investors back them privately. And unlike TV, nobody walks away with the money until the work is done."
       />
 

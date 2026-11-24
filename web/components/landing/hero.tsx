@@ -15,7 +15,7 @@ export function Hero() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink pb-3 font-mono text-[11px] uppercase tracking-[0.12em]">
           <span className="font-semibold">§00 · Front page</span>
-          <span className="text-muted">Shark Tank for crypto · Private · Solana</span>
+          <span className="text-muted">Shark Tank for every startup · Private · Solana</span>
         </div>
         <h1 className="mt-6 text-[11vw] font-black uppercase leading-[0.85] tracking-[-0.02em] sm:text-[96px] lg:text-[136px]">
           <span className="w-cond block">Pitch in public.</span>
@@ -24,7 +24,7 @@ export function Hero() {
         <div className="mt-10 grid gap-10 border-t-2 border-ink pt-8 lg:grid-cols-12">
           <div className="lg:col-span-6">
             <p className="max-w-lg text-lg leading-relaxed">
-              <span className="float-left mr-2 mt-1 font-mono text-5xl font-bold leading-[0.8]">F</span>ounders pitch any crypto product in public. You back them for real equity while your identity, amount and vote stay encrypted. Your money sits in a code-controlled safe and is only released when founders hit milestones you vote on. Miss one? You get refunded.
+              <span className="float-left mr-2 mt-1 font-mono text-5xl font-bold leading-[0.8]">F</span>ounders of any startup — a local business, a consumer brand, SaaS or a crypto project — pitch in public. You back them for equity with monthly revenue payouts, a token allocation, or both, while your identity, amount and vote stay encrypted. Your money sits in a code-controlled safe and is only released when founders hit milestones you vote on. Miss one? You get refunded.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button href="/app">Explore campaigns <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" /></Button>
@@ -56,7 +56,7 @@ function TermSheet() {
         <div className="p-4">
           <div className="w-cond display text-3xl font-black uppercase leading-none">FreshBox</div>
           <div className="mt-1 text-sm text-muted">Farm-to-door produce boxes</div>
-          <div className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">Ticker FRBX · Equity 10%</div>
+          <div className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">Equity 10% · 8% of revenue paid monthly</div>
         </div>
       </div>
       <div className="grid grid-cols-2 border-b border-ink">

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { getPortfolio, refundsClaimable, fmtUsdFull, msUntil } from "@/lib/data";
+import { getPortfolio, refundsClaimable, fmtUsdFull, msUntil, currentMs, offeringStamp, poolFraction, vestedFraction } from "@/lib/data";
 import { PageHeader } from "@/components/app/primitives";
 import PortfolioClient from "@/components/app/PortfolioClient";
 
@@ -25,6 +25,32 @@ async function PortfolioContent() {
     };
   });
 
+  const nowMs = currentMs(); // dynamic render (after connection)
+  const returns = holdings.filter((h) => byId.has(h.campaignId)).map((h) => {
+    const c = byId.get(h.campaignId)!;
+    const frac = poolFraction(h.amountUsdc, c.goalUsdc);
+    const t = c.offering.kind !== "equity" ? c.offering.token : undefined;
+    const alloc = t ? Math.floor((frac * t.totalSupply * t.investorAllocationBps) / 10000) : 0;
+    const vested = t ? Math.floor(alloc * vestedFraction(t, nowMs)) : 0;
+    return {
+      id: c.id,
+      name: c.name,
+      stamp: offeringStamp(c.offering.kind),
+      payout: c.offering.kind !== "token" ? { claimable: fmtUsdFull(h.claimablePayoutUsdc), has: h.claimablePayoutUsdc > 0 } : null,
+      token: t
+        ? {
+            symbol: t.symbol,
+            allocation: alloc.toLocaleString("en-US"),
+            vested: vested.toLocaleString("en-US"),
+            claimable: Math.max(0, vested - h.tokensClaimed).toLocaleString("en-US"),
+            has: vested - h.tokensClaimed > 0,
+            launched: !!t.mint,
+            target: t.targetLaunchDate.slice(0, 10),
+          }
+        : null,
+    };
+  });
+
   const pendingVotes = votes.filter((v) => byId.has(v.campaignId)).map((v) => {
     const c = byId.get(v.campaignId)!;
     const ms = msUntil(v.closesAt);
@@ -46,6 +72,7 @@ async function PortfolioContent() {
         rows={rows}
         total={fmtUsdFull(holdings.reduce((a, h) => a + h.amountUsdc, 0))}
         votes={pendingVotes}
+        returns={returns}
         refunds={refundsClaimable.map((r) => ({ campaign: r.campaign, reason: r.reason, amount: fmtUsdFull(r.amountUsdc) }))}
       />
     </>

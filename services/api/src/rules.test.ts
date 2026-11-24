@@ -182,3 +182,81 @@ test("rule 5: resubmission window [rejected, rejected+30d) end exclusive", () =>
   assert.equal(R.isMilestoneMissed(t.milestone, end - 1), false);
   assert.equal(R.isMilestoneMissed(t.milestone, end), true);
 });
+
+// ================= Offerings (v2) =================
+const D = R.DAY_MS;
+
+test("payout amount = basis x shareBps, floored to the cent", () => {
+  assert.equal(R.payoutAmountUsdc(12_500, 800), 1000);
+  assert.equal(R.payoutAmountUsdc(10_000.37, 1200), 1200.04);
+});
+
+test("payout periods: due date = period end + 15 days, after startsAfterDays grace", () => {
+  const p1 = R.payoutPeriod(0, 90, 1);
+  assert.equal(p1.start, 90 * D);
+  assert.equal(p1.end, 120 * D);
+  assert.equal(p1.due, 135 * D);
+  assert.equal(R.payoutPeriod(0, 90, 2).due, 165 * D);
+  assert.equal(R.endedPeriods(0, 90, 120 * D - 1), 0);
+  assert.equal(R.endedPeriods(0, 90, 120 * D), 1);
+});
+
+test("period status: ON_TIME at due boundary, LATE after; unpaid DUE then LATE", () => {
+  assert.equal(R.periodStatus(135 * D, 135 * D, 200 * D), "ON_TIME");
+  assert.equal(R.periodStatus(135 * D + 1, 135 * D, 200 * D), "LATE");
+  assert.equal(R.periodStatus(null, 135 * D, 135 * D), "DUE");
+  assert.equal(R.periodStatus(null, 135 * D, 135 * D + 1), "LATE");
+});
+
+test("3 consecutive LATE -> payoutDefault; ON_TIME resets the streak", () => {
+  assert.equal(R.isPayoutDefault(["LATE", "LATE", "ON_TIME", "LATE", "LATE"]), false);
+  assert.equal(R.isPayoutDefault(["ON_TIME", "LATE", "LATE", "LATE", "ON_TIME"]), true); // sticky
+  assert.equal(R.consecutiveLate(["ON_TIME", "LATE", "LATE", "DUE"]), 2);
+  const st = R.computePayoutStatus(0, 90, new Map(), 220 * D); // P1..P3 ended (ends 120,150,180), all past due by 220
+  assert.equal(st.consecutiveLate, 3);
+  assert.equal(st.defaulted, true);
+  assert.equal(st.lastPaidPeriod, null);
+  assert.equal(st.nextDueDate, new Date(135 * D).toISOString());
+});
+
+test("payout status with on-time deposits", () => {
+  const st = R.computePayoutStatus(0, 90, new Map([[1, 125 * D], [2, 155 * D]]), 160 * D);
+  assert.deepEqual(st.statuses, ["ON_TIME", "ON_TIME"]);
+  assert.equal(st.lastPaidPeriod, 2);
+  assert.equal(st.nextDueDate, new Date(195 * D).toISOString());
+  assert.equal(st.defaulted, false);
+});
+
+test("accumulator: pro-rata payouts, debt prevents double claim, late entrant gets nothing past", () => {
+  const total = 1000n;
+  let acc = R.accruePayout(0n, R.toMicro(100), total); // 100 USDC over 1000 shares
+  assert.equal(R.claimablePayout(250n, acc, 0n), R.toMicro(25));
+  const debt = R.payoutDebtFor(250n, acc); // after claim
+  assert.equal(R.claimablePayout(250n, acc, debt), 0n);
+  acc = R.accruePayout(acc, R.toMicro(40), total);
+  assert.equal(R.claimablePayout(250n, acc, debt), R.toMicro(10));
+  assert.equal(R.claimablePayout(750n, acc, 0n), R.toMicro(105));
+  assert.throws(() => R.accruePayout(0n, 1n, 0n), R.RuleError);
+});
+
+test("token vesting: nothing before cliff, linear after, capped at 1", () => {
+  const M = R.MONTH_MS;
+  const v = { cliffMonths: 3, months: 12 };
+  assert.equal(R.vestedFraction(null, 10 * M, v), 0);
+  assert.equal(R.vestedFraction(0, 3 * M - 1, v), 0);
+  assert.equal(R.vestedFraction(0, 3 * M, v), 0.25);
+  assert.equal(R.vestedFraction(0, 6 * M, v), 0.5);
+  assert.equal(R.vestedFraction(0, 24 * M, v), 1);
+  assert.equal(R.vestedFraction(0, 0, { cliffMonths: 0, months: 0 }), 1);
+  const alloc = R.investorTokenAllocation(1_000_000_000, 2000);
+  assert.equal(alloc, 200_000_000);
+  assert.equal(R.claimableTokens(alloc, 25_000, 250_000, 0.5, 0), 10_000_000);
+  assert.equal(R.claimableTokens(alloc, 25_000, 250_000, 0.5, 10_000_000), 0);
+});
+
+test("tokenOverdue = not launched by target + 180 days", () => {
+  assert.equal(R.isTokenOverdue(0, false, 180 * D - 1), false);
+  assert.equal(R.isTokenOverdue(0, false, 180 * D), true);
+  assert.equal(R.isTokenOverdue(0, true, 400 * D), false);
+  assert.deepEqual(R.computeTokenStatus(0, { mint: "m", launchedAt: 5 }, 400 * D), { launched: true, mint: "m", overdue: false });
+});

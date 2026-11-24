@@ -50,6 +50,136 @@ export interface Campaign {
   spending: SpendEntry[];
   /** ISO-8601: raise close + 365 days; share transfers blocked before this (API adds it). */
   lockupEndsAt?: string;
+  /** Offerings (v2). Optional for backward compatibility with v1 campaigns. */
+  category?: CampaignCategory;
+  offering?: Offering;
+  /** Computed by the API when offering has an equity block. */
+  payoutStatus?: PayoutStatus;
+  /** Computed by the API when offering has a token block. */
+  tokenStatus?: TokenStatus;
+  /** Public flags computed by the API, e.g. "PayoutDefault", "TokenOverdue". */
+  flags?: CampaignFlag[];
+}
+
+// ---- Offerings (v2) ----
+export type CampaignCategory = "business" | "crypto" | "consumer" | "saas" | "hardware" | "creator" | "other";
+export type OfferingKind = "equity" | "token" | "both";
+export type PayoutBasis = "revenue" | "profit";
+export type CampaignFlag = "PayoutDefault" | "TokenOverdue";
+
+export interface EquityPayout {
+  basis: PayoutBasis;
+  /** Portion of monthly revenue/profit paid to investors, bps. */
+  shareBps: number;
+  frequency: "monthly";
+  /** Grace period before the first payout period starts (default 90). */
+  startsAfterDays: number;
+}
+
+export interface EquityOffering {
+  /** Share of company sold to investors, bps. */
+  equityBps: number;
+  payout: EquityPayout;
+}
+
+export interface TokenVesting {
+  /** Default 0. */
+  cliffMonths: number;
+  /** Default 12, linear from launch. */
+  months: number;
+}
+
+export interface TokenOffering {
+  symbol: string;
+  totalSupply: number;
+  /** Share of supply reserved for investors, bps. */
+  investorAllocationBps: number;
+  /** ISO-8601 */
+  targetLaunchDate: string;
+  vesting: TokenVesting;
+}
+
+export interface Offering {
+  kind: OfferingKind;
+  equity?: EquityOffering;
+  token?: TokenOffering;
+}
+
+/** ON_TIME/LATE per SPEC; DUE = period ended, still inside its 15-day grace, unpaid. */
+export type PayoutPeriodStatus = "ON_TIME" | "LATE" | "DUE";
+
+export interface PayoutEntry {
+  /** 1-based payout period number. */
+  period: number;
+  periodStart: string;
+  periodEnd: string;
+  /** periodEnd + 15 days. */
+  dueDate: string;
+  basis: PayoutBasis;
+  /** Reported gross revenue/profit for the period (public report). */
+  basisAmountUsdc: number | null;
+  /** Amount deposited into the PayoutPool (basis x shareBps). */
+  paidUsdc: number;
+  status: PayoutPeriodStatus;
+  depositedAt: string | null;
+  reportUri: string | null;
+  txSig: string | null;
+}
+
+export interface PayoutStatus {
+  /** Due date of the earliest unpaid period (may be in the past if overdue). */
+  nextDueDate: string;
+  lastPaidPeriod: number | null;
+  consecutiveLate: number;
+  defaulted: boolean;
+}
+
+export interface TokenStatus {
+  launched: boolean;
+  mint: string | null;
+  overdue: boolean;
+  /** Additive extras. */
+  launchedAt?: string | null;
+  investorAllocation?: number;
+  overdueAt?: string;
+}
+
+export interface PayoutLedger {
+  campaignId: string;
+  basis: PayoutBasis;
+  shareBps: number;
+  entries: PayoutEntry[];
+  payoutStatus: PayoutStatus;
+}
+
+export interface DepositPayoutInput {
+  /** 1-based period number. */
+  period: number;
+  /** Gross revenue or profit for the period (per offering.equity.payout.basis). */
+  basisAmountUsdc: number;
+  /** Optional; if given must equal floor(basisAmountUsdc x shareBps / 10000) to the cent. */
+  amountUsdc?: number;
+  reportUri?: string;
+  txSig?: string;
+}
+
+export interface ClaimInput {
+  positionCommitment: string;
+  proof: string;
+}
+
+export interface ClaimResult {
+  claimId: string;
+  positionCommitment: string;
+  /** Claim amount encrypted for the investor (mockenc1: in mock mode). */
+  encryptedClaim: string;
+}
+
+export interface RegisterTokenInput {
+  mint: string;
+  /** Tokens deposited into the TokenVault; must equal the investor allocation. */
+  depositAmount: number;
+  txSig?: string;
 }
 
 /** Public, non-identifying vote round metadata (no per-voter data). */
@@ -83,10 +213,17 @@ export interface CreateCampaignInput {
   solution: string;
   useOfFunds: string[];
   goalUsdc: number;
-  equityBps: number;
+  /** Required unless offering is given (then defaults to offering.equity.equityBps, or 0 for token-only). */
+  equityBps?: number;
   upfrontBps?: number;
   raiseDeadline: string;
   minInvestors?: number;
+  category?: CampaignCategory;
+  offering?: {
+    kind: OfferingKind;
+    equity?: { equityBps: number; payout: { basis: PayoutBasis; shareBps: number; frequency?: "monthly"; startsAfterDays?: number } };
+    token?: { symbol: string; totalSupply: number; investorAllocationBps: number; targetLaunchDate: string; vesting?: { cliffMonths?: number; months?: number } };
+  };
   milestones: { title: string; description: string; releaseUsdc: number; deadline: string }[];
 }
 

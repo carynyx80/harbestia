@@ -29,10 +29,10 @@ export default function AppShell({ children, pill }: { children: ReactNode; pill
         <div className="mt-auto border-t-2 border-ink">
           <div className="bg-navy p-4 text-paper">
             <div className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em]">
-              <Lock className="h-3.5 w-3.5" /> Privacy layer active
+              <Lock className="h-3.5 w-3.5" /> Privacy layer: preview
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-paper/80">
-              Amounts shielded by Helius Rings. Votes tallied in Arcium MPC. Identity proven via ZK.
+              Mock encryption for now. Helius Rings, Arcium MPC and ZK proofs are being integrated.
             </p>
           </div>
         </div>

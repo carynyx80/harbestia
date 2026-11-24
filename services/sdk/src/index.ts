@@ -2,6 +2,7 @@ export * from "./types.js";
 import type {
   Campaign, CreateCampaignInput, EvidenceInput, FinalizeResult, InvestInput, InvestResult,
   Milestone, Portfolio, SpendEntry, SpendingInput, VoteInput, VoteRound,
+  DepositPayoutInput, PayoutEntry, PayoutLedger, ClaimInput, ClaimResult, RegisterTokenInput, TokenStatus,
 } from "./types.js";
 
 export interface ClientOptions {
@@ -47,6 +48,12 @@ export function createClient(opts: ClientOptions = {}) {
       req<FinalizeResult>("POST", `/campaigns/${encodeURIComponent(id)}/milestones/${idx}/finalize`, opts2),
     addSpending: (id: string, input: SpendingInput) => req<SpendEntry>("POST", `/campaigns/${encodeURIComponent(id)}/spending`, input),
     getPortfolio: (viewKeyHash: string) => req<Portfolio>("GET", `/portfolio/${encodeURIComponent(viewKeyHash)}`),
+    // ---- Offerings (v2) ----
+    depositPayout: (id: string, input: DepositPayoutInput) => req<PayoutEntry>("POST", `/campaigns/${encodeURIComponent(id)}/payouts`, input),
+    listPayouts: (id: string) => req<PayoutLedger>("GET", `/campaigns/${encodeURIComponent(id)}/payouts`),
+    claimPayout: (id: string, input: ClaimInput) => req<ClaimResult>("POST", `/campaigns/${encodeURIComponent(id)}/payouts/claim`, input),
+    registerToken: (id: string, input: RegisterTokenInput) => req<TokenStatus>("POST", `/campaigns/${encodeURIComponent(id)}/token`, input),
+    claimTokens: (id: string, input: ClaimInput) => req<ClaimResult>("POST", `/campaigns/${encodeURIComponent(id)}/token/claim`, input),
   };
 }
 
@@ -63,6 +70,11 @@ export const castVote = defaultClient.castVote;
 export const submitEvidence = defaultClient.submitEvidence;
 export const finalizeVote = defaultClient.finalizeVote;
 export const getPortfolio = defaultClient.getPortfolio;
+export const depositPayout = defaultClient.depositPayout;
+export const listPayouts = defaultClient.listPayouts;
+export const claimPayout = defaultClient.claimPayout;
+export const registerToken = defaultClient.registerToken;
+export const claimTokens = defaultClient.claimTokens;
 
 // ---- Mock client-side encryption helpers (stand-ins for Arcium/ZK client libs) ----
 // "mockenc1:" payloads are NOT secure; they let the local mock Arcium cluster decrypt.
@@ -90,4 +102,15 @@ export async function sealVote(choice: "yes" | "no", weight: number, secret = ra
     encryptedVote: "mockenc1:" + b64(JSON.stringify({ choice, weight })),
     proof: "mockproof:" + randomHex(8),
   };
+}
+/** Build a mock claim request for a position (the commitment returned/used at invest time). */
+export function sealClaim(positionCommitment: string): ClaimInput {
+  return { positionCommitment, proof: "mockproof:" + randomHex(8) };
+}
+/** Mock-decrypt a claim (only works for mockenc1: payloads). */
+export function openMockClaim(encryptedClaim: string): { amount: number; unit: "USDC" | string } {
+  if (!encryptedClaim.startsWith("mockenc1:")) throw new Error("not a mock claim");
+  const raw = encryptedClaim.slice("mockenc1:".length);
+  const txt = typeof atob === "function" ? atob(raw) : Buffer.from(raw, "base64").toString("utf8");
+  return JSON.parse(txt);
 }

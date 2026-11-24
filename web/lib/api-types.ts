@@ -51,6 +51,96 @@ export interface Campaign {
   spending: SpendEntry[];
   /** ISO-8601: raise close + 365 days; share transfers blocked before this (API adds it). */
   lockupEndsAt?: string;
+  /** Offerings (v2) — optional until the API deploys. */
+  category?: CampaignCategory;
+  offering?: Offering;
+  /** Public flags (v2). */
+  flags?: CampaignFlag[];
+}
+
+// ---- Offerings (v2) ----
+export type CampaignCategory = "business" | "crypto" | "consumer" | "saas" | "hardware" | "creator" | "other";
+export type OfferingKind = "equity" | "token" | "both";
+export type PayoutBasis = "revenue" | "profit";
+export type CampaignFlag = "PayoutDefault" | "TokenOverdue";
+
+export interface EquityPayoutTerms {
+  basis: PayoutBasis;
+  /** Portion of monthly revenue/profit paid to investors, bps. */
+  shareBps: number;
+  frequency: "monthly";
+  /** Grace period before first payout, default 90. */
+  startsAfterDays: number;
+}
+export interface EquityOffering {
+  /** Share of company sold to investors, bps. */
+  equityBps: number;
+  payout: EquityPayoutTerms;
+}
+export interface TokenOffering {
+  symbol: string;
+  totalSupply: number;
+  /** Share of supply reserved for investors, bps. */
+  investorAllocationBps: number;
+  /** ISO-8601 */
+  targetLaunchDate: string;
+  vesting: { cliffMonths: number; months: number };
+  /** Set after register_token(mint). */
+  mint?: string | null;
+  /** ISO-8601 launch (register) time, if launched. */
+  launchedAt?: string | null;
+}
+export interface Offering {
+  kind: OfferingKind;
+  equity?: EquityOffering;
+  token?: TokenOffering;
+}
+
+export type PayoutStatus = "ON_TIME" | "LATE";
+/** Public monthly payout ledger row. */
+export interface PayoutEntry {
+  /** API: 1-based period number; UI normalizes to a "YYYY-MM" label. */
+  period: string | number;
+  periodStart?: string;
+  periodEnd?: string;
+  dueDate?: string;
+  reportUri?: string | null;
+  /** Gross revenue or profit reported for the period. */
+  basisAmountUsdc: number;
+  /** Amount deposited for investors = basis × shareBps. */
+  paidUsdc: number;
+  status: PayoutStatus;
+  /** ISO-8601 */
+  depositedAt: string | null;
+  txSig?: string | null;
+}
+/** GET /campaigns/:id/payouts response. */
+export interface PayoutLedger {
+  campaignId: string;
+  basis: PayoutBasis;
+  shareBps: number;
+  entries: PayoutEntry[];
+}
+export interface PayoutDepositInput {
+  period: string | number;
+  basisAmountUsdc: number;
+  amountUsdc: number;
+}
+export interface PayoutClaimInput {
+  positionCommitment: string;
+  proof: string;
+}
+export interface EncryptedClaim {
+  encryptedClaim: string;
+  claimId?: string;
+}
+export interface RegisterTokenInput {
+  mint: string;
+  depositAmount: number;
+}
+export interface TokenClaimInput {
+  positionCommitment: string;
+  proof: string;
 }
 
 /** Public, non-identifying vote round metadata (no per-voter data). */
@@ -89,6 +179,8 @@ export interface CreateCampaignInput {
   raiseDeadline: string;
   minInvestors?: number;
   milestones: { title: string; description: string; releaseUsdc: number; deadline: string }[];
+  category?: CampaignCategory;
+  offering?: Offering;
 }
 
 export interface InvestInput {

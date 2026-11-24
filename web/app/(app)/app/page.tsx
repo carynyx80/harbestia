@@ -2,13 +2,22 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import Link from "next/link";
 import { EyeOff, Flag, ArrowUpRight, Clock } from "lucide-react";
-import { getCampaigns, fmtUsd, daysUntil } from "@/lib/data";
+import { getCampaigns, fmtUsd, daysUntil, offeringStamp, type OfferingKind } from "@/lib/data";
 import { FadeIn, PageHeader, ProgressBar } from "@/components/app/primitives";
 
-async function ExploreContent() {
+const KIND_FILTERS: { key: "all" | OfferingKind; label: string }[] = [
+  { key: "all", label: "All offerings" },
+  { key: "equity", label: "Equity · payouts" },
+  { key: "token", label: "Token" },
+  { key: "both", label: "Equity + token" },
+];
+
+async function ExploreContent({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
   await connection();
-  const campaigns = await getCampaigns();
-  const filters = ["All", "Raising", "Active", "Food & Logistics", "Climate", "Health", "AgTech", "SaaS"];
+  const { kind: rawKind } = await searchParams;
+  const kind = KIND_FILTERS.some((f) => f.key === rawKind) ? (rawKind as "all" | OfferingKind) : "all";
+  const all = await getCampaigns();
+  const campaigns = kind === "all" ? all : all.filter((c) => c.offering.kind === kind);
 
   return (
     <>
@@ -30,20 +39,23 @@ async function ExploreContent() {
       />
 
       <FadeIn delay={0.05} className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        {filters.map((f, i) => (
-          <button
-            key={f}
+        {KIND_FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={f.key === "all" ? "/app" : `/app?kind=${f.key}`}
+            aria-current={kind === f.key ? "page" : undefined}
             className={`whitespace-nowrap px-3.5 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] transition ${
-              i === 0
+              kind === f.key
                 ? "border border-ink bg-ink text-paper"
                 : "border border-ink text-ink hover:bg-ink hover:text-paper"
             }`}
           >
-            {f}
-          </button>
+            {f.label}
+          </Link>
         ))}
       </FadeIn>
 
+      {campaigns.length === 0 && <p className="text-sm text-muted">No campaigns with this offering yet.</p>}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {campaigns.map((c, i) => {
           const pct = (c.raisedUsdc / c.goalUsdc) * 100;
@@ -65,6 +77,7 @@ async function ExploreContent() {
                     <span className="stamp bg-paper text-ink">
                       {c.category}
                     </span>
+                    <span className="stamp bg-ink text-paper !border-ink">{offeringStamp(c.offering.kind)}</span>
                     <span
                       className={`stamp ${
                         c.status === "Active" ? "bg-signal text-ink !border-ink" : "bg-navy text-paper !border-navy"
@@ -118,10 +131,10 @@ async function ExploreContent() {
   );
 }
 
-export default function ExplorePage() {
+export default function ExplorePage({ searchParams }: { searchParams: Promise<{ kind?: string }> }) {
   return (
     <Suspense fallback={<div className="h-[60vh] animate-pulse bg-paper" />}>
-      <ExploreContent />
+      <ExploreContent searchParams={searchParams} />
     </Suspense>
   );
 }

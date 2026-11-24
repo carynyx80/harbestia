@@ -59,6 +59,22 @@ pub enum LogicError {
     ExitWindowClosed,
     InsufficientShares,
     OverSpend,
+    // ---- Offerings (v2)
+    InvalidCategory,
+    InvalidOffering,
+    InvalidPayoutTerms,
+    InvalidTokenTerms,
+    NoPayoutOffering,
+    NoTokenOffering,
+    PayoutTooSmall,
+    PeriodNotEnded,
+    PeriodNotDue,
+    WrongPeriod,
+    AlreadyPaid,
+    NoShares,
+    TokenAlreadyRegistered,
+    TokenNotRegistered,
+    NothingToClaim,
 }
 
 pub type LResult<T> = core::result::Result<T, LogicError>;
@@ -594,6 +610,402 @@ pub fn is_transfer_allowed(now: i64, lockup_ends_at: i64, sender_allowlisted: bo
     sender_allowlisted && receiver_allowlisted && now >= lockup_ends_at
 }
 
+// ================================================================ Offerings (v2)
+//
+// Campaign `category` + `offering` (kind equity | token | both).
+// Equity payouts use a cumulative payout-per-share accumulator scaled by 1e12:
+//   acc += amount * ACC_SCALE / outstanding_shares        (on every deposit)
+//   pending = shares * acc / ACC_SCALE - payout_debt        (per position)
+//   payout_debt = shares * acc / ACC_SCALE                  (after claim / share change)
+// Founder-retained shares are excluded: only `outstanding_shares` (investor shares) count.
+// Payout periods: period p covers [start + p*30d, start + (p+1)*30d) where
+// start = activation (close_raise) + starts_after_days; due = period end + 15 days
+// (half-open: paid at `now < due` is ON_TIME, at `now >= due` it is LATE).
+
+pub const ACC_SCALE: u128 = 1_000_000_000_000; // 1e12
+pub const PAYOUT_PERIOD: i64 = 30 * DAY; // "monthly"
+pub const PAYOUT_GRACE: i64 = 15 * DAY; // due = period end + 15 days
+pub const DEFAULT_STARTS_AFTER_DAYS: u16 = 90;
+pub const MAX_STARTS_AFTER_DAYS: u16 = 730;
+pub const PAYOUT_DEFAULT_STREAK: u8 = 3; // 3 consecutive LATE periods -> PayoutDefault
+pub const TOKEN_OVERDUE_GRACE: i64 = 180 * DAY;
+pub const VEST_MONTH: i64 = 30 * DAY;
+pub const DEFAULT_VEST_MONTHS: u16 = 12;
+pub const MAX_CLIFF_MONTHS: u16 = 60;
+pub const MAX_VEST_MONTHS: u16 = 120;
+pub const MAX_SYMBOL_LEN: usize = 10;
+
+/// Public campaign flags (bitmask on `Campaign.flags`).
+pub const FLAG_PAYOUT_DEFAULT: u8 = 1 << 0;
+pub const FLAG_TOKEN_OVERDUE: u8 = 1 << 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Category {
+    Business = 0,
+    Crypto = 1,
+    Consumer = 2,
+    Saas = 3,
+    Hardware = 4,
+    Creator = 5,
+    Other = 6,
+}
+
+impl Category {
+    pub fn from_u8(v: u8) -> LResult<Self> {
+        Ok(match v {
+            0 => Self::Business,
+            1 => Self::Crypto,
+            2 => Self::Consumer,
+            3 => Self::Saas,
+            4 => Self::Hardware,
+            5 => Self::Creator,
+            6 => Self::Other,
+            _ => return Err(LogicError::InvalidCategory),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum OfferingKind {
+    Equity = 0,
+    Token = 1,
+    Both = 2,
+}
+
+impl OfferingKind {
+    pub fn from_u8(v: u8) -> LResult<Self> {
+        Ok(match v {
+            0 => Self::Equity,
+            1 => Self::Token,
+            2 => Self::Both,
+            _ => return Err(LogicError::InvalidOffering),
+        })
+    }
+    pub fn has_equity(self) -> bool {
+        matches!(self, Self::Equity | Self::Both)
+    }
+    pub fn has_token(self) -> bool {
+        matches!(self, Self::Token | Self::Both)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PayoutBasis {
+    Revenue = 0,
+    Profit = 1,
+}
+
+impl PayoutBasis {
+    pub fn from_u8(v: u8) -> LResult<Self> {
+        Ok(match v {
+            0 => Self::Revenue,
+            1 => Self::Profit,
+            _ => return Err(LogicError::InvalidPayoutTerms),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PayoutStatus {
+    OnTime = 0,
+    Late = 1,
+}
+
+impl PayoutStatus {
+    pub fn from_u8(v: u8) -> LResult<Self> {
+        Ok(match v {
+            0 => Self::OnTime,
+            1 => Self::Late,
+            _ => return Err(LogicError::InvalidStatus),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EquityTerms {
+    pub equity_bps: u16,
+    pub basis: u8, // PayoutBasis
+    pub share_bps: u16,
+    pub starts_after_days: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenTerms<'a> {
+    pub symbol: &'a str,
+    pub total_supply: u64,
+    pub investor_allocation_bps: u16,
+    pub target_launch_date: i64,
+    pub cliff_months: u16,
+    pub months: u16,
+}
+
+pub fn validate_equity_terms(e: &EquityTerms, campaign_equity_bps: u16) -> LResult<()> {
+    if e.equity_bps == 0 || e.equity_bps as u64 >= BPS_DENOM || e.equity_bps != campaign_equity_bps {
+        return Err(LogicError::InvalidEquity);
+    }
+    PayoutBasis::from_u8(e.basis)?;
+    if e.share_bps == 0 || e.share_bps as u64 > BPS_DENOM {
+        return Err(LogicError::InvalidPayoutTerms);
+    }
+    if e.starts_after_days > MAX_STARTS_AFTER_DAYS {
+        return Err(LogicError::InvalidPayoutTerms);
+    }
+    Ok(())
+}
+
+pub fn validate_token_terms(t: &TokenTerms, now: i64) -> LResult<()> {
+    let sym = t.symbol.as_bytes();
+    if sym.is_empty() || sym.len() > MAX_SYMBOL_LEN || !sym.iter().all(|b| b.is_ascii_alphanumeric()) {
+        return Err(LogicError::InvalidTokenTerms);
+    }
+    if t.total_supply == 0 || t.investor_allocation_bps == 0 || t.investor_allocation_bps as u64 > BPS_DENOM {
+        return Err(LogicError::InvalidTokenTerms);
+    }
+    // allocation must be at least one base unit
+    if token_investor_allocation(t.total_supply, t.investor_allocation_bps)? == 0 {
+        return Err(LogicError::InvalidTokenTerms);
+    }
+    if t.target_launch_date <= now {
+        return Err(LogicError::InvalidTokenTerms);
+    }
+    if t.cliff_months > MAX_CLIFF_MONTHS || t.months > MAX_VEST_MONTHS {
+        return Err(LogicError::InvalidTokenTerms);
+    }
+    Ok(())
+}
+
+/// Validates category + offering: the blocks present must match the kind exactly.
+pub fn validate_offering(
+    category: u8,
+    kind: u8,
+    equity: Option<&EquityTerms>,
+    token: Option<&TokenTerms>,
+    campaign_equity_bps: u16,
+    now: i64,
+) -> LResult<OfferingKind> {
+    Category::from_u8(category)?;
+    let k = OfferingKind::from_u8(kind)?;
+    if k.has_equity() != equity.is_some() || k.has_token() != token.is_some() {
+        return Err(LogicError::InvalidOffering);
+    }
+    if let Some(e) = equity {
+        validate_equity_terms(e, campaign_equity_bps)?;
+    }
+    if let Some(t) = token {
+        validate_token_terms(t, now)?;
+    }
+    Ok(k)
+}
+
+// ---------------------------------------------------------------- payout accumulator
+
+/// New accumulator after depositing `amount` across `outstanding_shares`.
+pub fn acc_after_deposit(acc: u128, amount: u64, outstanding_shares: u64) -> LResult<u128> {
+    if outstanding_shares == 0 {
+        return Err(LogicError::NoShares);
+    }
+    if amount == 0 {
+        return Err(LogicError::ZeroAmount);
+    }
+    let inc = (amount as u128)
+        .checked_mul(ACC_SCALE)
+        .ok_or(LogicError::MathOverflow)?
+        / outstanding_shares as u128;
+    acc.checked_add(inc).ok_or(LogicError::MathOverflow)
+}
+
+/// Debt for a position holding `shares` at accumulator `acc` (USDC base units).
+pub fn payout_debt_for(shares: u64, acc: u128) -> LResult<u128> {
+    Ok((shares as u128).checked_mul(acc).ok_or(LogicError::MathOverflow)? / ACC_SCALE)
+}
+
+/// claimable = shares * acc / 1e12 - payout_debt (never negative).
+pub fn pending_payout(shares: u64, acc: u128, payout_debt: u128) -> LResult<u64> {
+    let accrued = payout_debt_for(shares, acc)?;
+    let p = accrued.saturating_sub(payout_debt);
+    u64::try_from(p).map_err(|_| LogicError::MathOverflow)
+}
+
+/// Minimum payout the founder must deposit: gross × share_bps / 10000.
+pub fn required_payout(gross: u64, share_bps: u16) -> LResult<u64> {
+    bps_of(gross, share_bps as u64)
+}
+
+/// `[start, end)` of payout period `period`, and its due date (end + 15 days).
+pub fn payout_period_bounds(activated_at: i64, starts_after_days: u16, period: u32) -> LResult<(i64, i64, i64)> {
+    let first = add_ts(activated_at, (starts_after_days as i64).checked_mul(DAY).ok_or(LogicError::MathOverflow)?)?;
+    let start = add_ts(first, (period as i64).checked_mul(PAYOUT_PERIOD).ok_or(LogicError::MathOverflow)?)?;
+    let end = add_ts(start, PAYOUT_PERIOD)?;
+    let due = add_ts(end, PAYOUT_GRACE)?;
+    Ok((start, end, due))
+}
+
+/// ON_TIME iff paid strictly before the due date (half-open, due exclusive).
+pub fn payout_status_at(now: i64, due: i64) -> PayoutStatus {
+    if now < due {
+        PayoutStatus::OnTime
+    } else {
+        PayoutStatus::Late
+    }
+}
+
+/// Consecutive-late streak update: a LATE period extends it, an ON_TIME period resets it.
+pub fn next_late_streak(streak: u8, status: PayoutStatus) -> u8 {
+    match status {
+        PayoutStatus::OnTime => 0,
+        PayoutStatus::Late => streak.saturating_add(1),
+    }
+}
+
+pub fn is_payout_default(streak: u8) -> bool {
+    streak >= PAYOUT_DEFAULT_STREAK
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PayoutDeposit {
+    pub status: PayoutStatus,
+    pub new_acc: u128,
+    pub due: i64,
+}
+
+/// Founder deposits the payout for `period` (must be the next unsettled period, already ended).
+pub fn deposit_payout(
+    campaign_status: CampaignStatus,
+    kind: OfferingKind,
+    share_bps: u16,
+    activated_at: i64,
+    starts_after_days: u16,
+    next_period: u32,
+    period: u32,
+    gross: u64,
+    amount: u64,
+    acc: u128,
+    outstanding_shares: u64,
+    now: i64,
+) -> LResult<PayoutDeposit> {
+    if !matches!(campaign_status, CampaignStatus::Active | CampaignStatus::Completed) {
+        return Err(LogicError::InvalidStatus);
+    }
+    if !kind.has_equity() {
+        return Err(LogicError::NoPayoutOffering);
+    }
+    if period != next_period {
+        return Err(LogicError::WrongPeriod);
+    }
+    let (_, end, due) = payout_period_bounds(activated_at, starts_after_days, period)?;
+    if now < end {
+        return Err(LogicError::PeriodNotEnded);
+    }
+    if amount == 0 {
+        return Err(LogicError::ZeroAmount);
+    }
+    if amount < required_payout(gross, share_bps)? {
+        return Err(LogicError::PayoutTooSmall);
+    }
+    let new_acc = acc_after_deposit(acc, amount, outstanding_shares)?;
+    Ok(PayoutDeposit { status: payout_status_at(now, due), new_acc, due })
+}
+
+/// Late payment of a period already publicly marked LATE (status stays LATE).
+pub fn deposit_late_marked(
+    paid: bool,
+    gross: u64,
+    amount: u64,
+    share_bps: u16,
+    acc: u128,
+    outstanding_shares: u64,
+) -> LResult<u128> {
+    if paid {
+        return Err(LogicError::AlreadyPaid);
+    }
+    if amount == 0 {
+        return Err(LogicError::ZeroAmount);
+    }
+    if amount < required_payout(gross, share_bps)? {
+        return Err(LogicError::PayoutTooSmall);
+    }
+    acc_after_deposit(acc, amount, outstanding_shares)
+}
+
+/// Anyone may mark the next unsettled period LATE once its due date passed with no deposit.
+/// Returns the new streak.
+pub fn mark_late(
+    kind: OfferingKind,
+    activated_at: i64,
+    starts_after_days: u16,
+    next_period: u32,
+    period: u32,
+    streak: u8,
+    now: i64,
+) -> LResult<u8> {
+    if !kind.has_equity() {
+        return Err(LogicError::NoPayoutOffering);
+    }
+    if period != next_period {
+        return Err(LogicError::WrongPeriod);
+    }
+    let (_, _, due) = payout_period_bounds(activated_at, starts_after_days, period)?;
+    if now < due {
+        return Err(LogicError::PeriodNotDue);
+    }
+    Ok(next_late_streak(streak, PayoutStatus::Late))
+}
+
+// ---------------------------------------------------------------- token allocation
+
+pub fn token_investor_allocation(total_supply: u64, investor_allocation_bps: u16) -> LResult<u64> {
+    bps_of(total_supply, investor_allocation_bps as u64)
+}
+
+/// Linear vesting: nothing before `launch + cliff`, then linear over `months` (30-day months)
+/// starting at the cliff end; `months == 0` releases everything at the cliff.
+pub fn vested_tokens(total: u64, launch: i64, cliff_months: u16, months: u16, now: i64) -> LResult<u64> {
+    let cliff_end = add_ts(launch, (cliff_months as i64) * VEST_MONTH)?;
+    if now < cliff_end {
+        return Ok(0);
+    }
+    let dur = (months as i64) * VEST_MONTH;
+    if dur == 0 {
+        return Ok(total);
+    }
+    let elapsed = now - cliff_end;
+    if elapsed >= dur {
+        return Ok(total);
+    }
+    mul_div(total, elapsed as u64, dur as u64)
+}
+
+/// Position's claimable tokens: vested × stake / snapshot_shares − already claimed.
+pub fn token_claimable(vested: u64, stake: u64, snapshot_shares: u64, claimed: u64) -> LResult<u64> {
+    if snapshot_shares == 0 {
+        return Err(LogicError::NoShares);
+    }
+    let entitled = mul_div(vested, stake, snapshot_shares)?;
+    Ok(entitled.saturating_sub(claimed))
+}
+
+/// `TokenOverdue`: token not launched by target + 180 days (at exactly that instant it is overdue).
+pub fn is_token_overdue(target_launch_date: i64, launched: bool, now: i64) -> bool {
+    !launched && now >= target_launch_date.saturating_add(TOKEN_OVERDUE_GRACE)
+}
+
+pub fn check_register_token(campaign_status: CampaignStatus, kind: OfferingKind, already_registered: bool) -> LResult<()> {
+    if !kind.has_token() {
+        return Err(LogicError::NoTokenOffering);
+    }
+    if already_registered {
+        return Err(LogicError::TokenAlreadyRegistered);
+    }
+    if !matches!(campaign_status, CampaignStatus::Active | CampaignStatus::Completed) {
+        return Err(LogicError::InvalidStatus);
+    }
+    Ok(())
+}
+
 // ================================================================ tests
 
 #[cfg(test)]
@@ -1101,5 +1513,339 @@ mod tests {
         }
         assert_eq!(locked, 0);
         assert_eq!(founder_vested(founder_shares_total, released_sched, total_sched).unwrap(), founder_shares_total);
+    }
+}
+
+#[cfg(test)]
+mod offering_tests {
+    use super::*;
+
+    const NOW: i64 = 1_800_000_000;
+    const USDC: u64 = 1_000_000;
+
+    fn eq() -> EquityTerms {
+        EquityTerms { equity_bps: 1000, basis: PayoutBasis::Revenue as u8, share_bps: 1000, starts_after_days: 90 }
+    }
+    fn tok() -> TokenTerms<'static> {
+        TokenTerms {
+            symbol: "FRSH",
+            total_supply: 1_000_000_000,
+            investor_allocation_bps: 1500,
+            target_launch_date: NOW + 365 * DAY,
+            cliff_months: 0,
+            months: 12,
+        }
+    }
+
+    // ------------------------------------------------ validation
+    #[test]
+    fn validate_equity_kind() {
+        assert_eq!(validate_offering(0, 0, Some(&eq()), None, 1000, NOW).unwrap(), OfferingKind::Equity);
+        // missing equity block / extra token block
+        assert_eq!(validate_offering(0, 0, None, None, 1000, NOW), Err(LogicError::InvalidOffering));
+        assert_eq!(validate_offering(0, 0, Some(&eq()), Some(&tok()), 1000, NOW), Err(LogicError::InvalidOffering));
+        // equity bps must match the campaign and be in (0, 10000)
+        assert_eq!(validate_offering(0, 0, Some(&eq()), None, 900, NOW), Err(LogicError::InvalidEquity));
+        let mut e = eq();
+        e.equity_bps = 0;
+        assert_eq!(validate_equity_terms(&e, 0), Err(LogicError::InvalidEquity));
+        let mut e = eq();
+        e.basis = 2;
+        assert_eq!(validate_equity_terms(&e, 1000), Err(LogicError::InvalidPayoutTerms));
+        let mut e = eq();
+        e.basis = PayoutBasis::Profit as u8;
+        assert!(validate_equity_terms(&e, 1000).is_ok());
+        let mut e = eq();
+        e.share_bps = 0;
+        assert_eq!(validate_equity_terms(&e, 1000), Err(LogicError::InvalidPayoutTerms));
+        e.share_bps = 10_001;
+        assert_eq!(validate_equity_terms(&e, 1000), Err(LogicError::InvalidPayoutTerms));
+        e.share_bps = 10_000;
+        assert!(validate_equity_terms(&e, 1000).is_ok());
+        let mut e = eq();
+        e.starts_after_days = MAX_STARTS_AFTER_DAYS + 1;
+        assert_eq!(validate_equity_terms(&e, 1000), Err(LogicError::InvalidPayoutTerms));
+        e.starts_after_days = 0;
+        assert!(validate_equity_terms(&e, 1000).is_ok());
+    }
+
+    #[test]
+    fn validate_token_kind() {
+        assert_eq!(validate_offering(1, 1, None, Some(&tok()), 1000, NOW).unwrap(), OfferingKind::Token);
+        assert_eq!(validate_offering(1, 1, Some(&eq()), Some(&tok()), 1000, NOW), Err(LogicError::InvalidOffering));
+        assert_eq!(validate_offering(1, 1, None, None, 1000, NOW), Err(LogicError::InvalidOffering));
+        let bad = |f: &dyn Fn(&mut TokenTerms)| {
+            let mut t = tok();
+            f(&mut t);
+            validate_token_terms(&t, NOW)
+        };
+        assert_eq!(bad(&|t| t.symbol = ""), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.symbol = "TOOLONGSYMB"), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.symbol = "BAD$"), Err(LogicError::InvalidTokenTerms));
+        assert!(bad(&|t| t.symbol = "ABCDEFGHIJ").is_ok());
+        assert_eq!(bad(&|t| t.total_supply = 0), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.investor_allocation_bps = 0), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.investor_allocation_bps = 10_001), Err(LogicError::InvalidTokenTerms));
+        assert!(bad(&|t| t.investor_allocation_bps = 10_000).is_ok());
+        // allocation rounds to zero
+        assert_eq!(bad(&|t| { t.total_supply = 1; t.investor_allocation_bps = 1 }), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.target_launch_date = NOW), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.cliff_months = MAX_CLIFF_MONTHS + 1), Err(LogicError::InvalidTokenTerms));
+        assert_eq!(bad(&|t| t.months = MAX_VEST_MONTHS + 1), Err(LogicError::InvalidTokenTerms));
+        assert!(bad(&|t| t.months = 0).is_ok());
+    }
+
+    #[test]
+    fn validate_both_kind_and_category() {
+        assert_eq!(validate_offering(3, 2, Some(&eq()), Some(&tok()), 1000, NOW).unwrap(), OfferingKind::Both);
+        assert_eq!(validate_offering(3, 2, Some(&eq()), None, 1000, NOW), Err(LogicError::InvalidOffering));
+        assert_eq!(validate_offering(3, 2, None, Some(&tok()), 1000, NOW), Err(LogicError::InvalidOffering));
+        let mut t = tok();
+        t.total_supply = 0;
+        assert_eq!(validate_offering(3, 2, Some(&eq()), Some(&t), 1000, NOW), Err(LogicError::InvalidTokenTerms));
+        for c in 0..=6u8 {
+            assert_eq!(Category::from_u8(c).unwrap() as u8, c);
+        }
+        assert_eq!(validate_offering(7, 0, Some(&eq()), None, 1000, NOW), Err(LogicError::InvalidCategory));
+        assert_eq!(validate_offering(0, 3, None, None, 1000, NOW), Err(LogicError::InvalidOffering));
+        assert!(OfferingKind::Both.has_equity() && OfferingKind::Both.has_token());
+        assert!(!OfferingKind::Token.has_equity() && !OfferingKind::Equity.has_token());
+    }
+
+    // ------------------------------------------------ accumulator
+    /// Simulated position for accumulator tests.
+    struct Pos {
+        shares: u64,
+        debt: u128,
+        paid: u64,
+    }
+    fn claim(p: &mut Pos, acc: u128) -> u64 {
+        let c = pending_payout(p.shares, acc, p.debt).unwrap();
+        p.paid += c;
+        p.debt = payout_debt_for(p.shares, acc).unwrap();
+        c
+    }
+
+    #[test]
+    fn accumulator_multiple_deposits_and_claims() {
+        // A 100, B 300 shares; outstanding 400
+        let out = 400u64;
+        let mut a = Pos { shares: 100, debt: 0, paid: 0 };
+        let mut b = Pos { shares: 300, debt: 0, paid: 0 };
+        let mut acc = acc_after_deposit(0, 1000, out).unwrap();
+        assert_eq!(acc, 1000 * ACC_SCALE / 400);
+        assert_eq!(pending_payout(a.shares, acc, a.debt).unwrap(), 250);
+        assert_eq!(claim(&mut a, acc), 250);
+        assert_eq!(pending_payout(a.shares, acc, a.debt).unwrap(), 0); // double claim gives 0
+        acc = acc_after_deposit(acc, 2000, out).unwrap();
+        assert_eq!(claim(&mut a, acc), 500);
+        // B never claimed: accrues both deposits
+        assert_eq!(claim(&mut b, acc), 750 + 1500);
+        acc = acc_after_deposit(acc, 400, out).unwrap();
+        assert_eq!(claim(&mut b, acc), 300);
+        assert_eq!(claim(&mut a, acc), 100);
+        assert_eq!(a.paid + b.paid, 3400);
+    }
+
+    #[test]
+    fn accumulator_rounding_never_overpays() {
+        let out = 3u64;
+        let shares = [1u64, 1, 1];
+        let mut acc = 0u128;
+        let mut debts = [0u128; 3];
+        let mut paid = 0u64;
+        let mut deposited = 0u64;
+        for d in [10u64, 7, 1, 1_000_001] {
+            acc = acc_after_deposit(acc, d, out).unwrap();
+            deposited += d;
+            for i in 0..3 {
+                paid += pending_payout(shares[i], acc, debts[i]).unwrap();
+                debts[i] = payout_debt_for(shares[i], acc).unwrap();
+            }
+            assert!(paid <= deposited);
+        }
+        assert!(deposited - paid <= 3); // dust only
+    }
+
+    #[test]
+    fn accumulator_share_change_exit() {
+        // exit: claim pending first, then burn shares and reset debt at new share count
+        let out = 1000u64;
+        let mut a = Pos { shares: 500, debt: 0, paid: 0 };
+        let mut b = Pos { shares: 500, debt: 0, paid: 0 };
+        let mut acc = acc_after_deposit(0, 1000, out).unwrap();
+        // A exits 400 shares
+        assert_eq!(claim(&mut a, acc), 500);
+        a.shares -= 400;
+        a.debt = payout_debt_for(a.shares, acc).unwrap();
+        let out = out - 400;
+        acc = acc_after_deposit(acc, 600, out).unwrap(); // 1 per share now
+        assert_eq!(claim(&mut a, acc), 100);
+        assert_eq!(claim(&mut b, acc), 500 + 500);
+        assert_eq!(a.paid + b.paid, 1600);
+        // without resetting debt after a burn the position would be under-paid, never over-paid
+        assert_eq!(pending_payout(10, acc, payout_debt_for(100, acc).unwrap()).unwrap(), 0);
+    }
+
+    #[test]
+    fn accumulator_guards() {
+        assert_eq!(acc_after_deposit(0, 1, 0), Err(LogicError::NoShares));
+        assert_eq!(acc_after_deposit(0, 0, 1), Err(LogicError::ZeroAmount));
+        assert_eq!(acc_after_deposit(u128::MAX, 1, 1), Err(LogicError::MathOverflow));
+        // large realistic numbers: 500k USDC of shares, 1M USDC payout
+        let acc = acc_after_deposit(0, 1_000_000 * USDC, 500_000 * USDC).unwrap();
+        assert_eq!(pending_payout(20_000 * USDC, acc, 0).unwrap(), 40_000 * USDC);
+    }
+
+    // ------------------------------------------------ deposits, late, default
+    #[test]
+    fn required_payout_and_bounds() {
+        assert_eq!(required_payout(50_000 * USDC, 1000).unwrap(), 5_000 * USDC);
+        let act = NOW;
+        let (s0, e0, d0) = payout_period_bounds(act, 90, 0).unwrap();
+        assert_eq!(s0, act + 90 * DAY);
+        assert_eq!(e0, s0 + PAYOUT_PERIOD);
+        assert_eq!(d0, e0 + 15 * DAY);
+        let (s1, _, _) = payout_period_bounds(act, 90, 1).unwrap();
+        assert_eq!(s1, e0);
+        assert_eq!(payout_status_at(d0 - 1, d0), PayoutStatus::OnTime);
+        assert_eq!(payout_status_at(d0, d0), PayoutStatus::Late); // due exclusive
+    }
+
+    #[test]
+    fn deposit_payout_rules() {
+        let (a, k) = (CampaignStatus::Active, OfferingKind::Equity);
+        let (_, end, due) = payout_period_bounds(NOW, 90, 0).unwrap();
+        let ok = deposit_payout(a, k, 1000, NOW, 90, 0, 0, 10_000, 1_000, 0, 100, end).unwrap();
+        assert_eq!(ok.status, PayoutStatus::OnTime);
+        assert_eq!(ok.due, due);
+        assert_eq!(ok.new_acc, 10 * ACC_SCALE);
+        // over-paying is allowed
+        assert!(deposit_payout(a, k, 1000, NOW, 90, 0, 0, 10_000, 5_000, 0, 100, end).is_ok());
+        assert_eq!(deposit_payout(a, k, 1000, NOW, 90, 0, 0, 10_000, 999, 0, 100, end), Err(LogicError::PayoutTooSmall));
+        assert_eq!(deposit_payout(a, k, 1000, NOW, 90, 0, 0, 10_000, 1_000, 0, 100, end - 1), Err(LogicError::PeriodNotEnded));
+        assert_eq!(deposit_payout(a, k, 1000, NOW, 90, 0, 1, 10_000, 1_000, 0, 100, end), Err(LogicError::WrongPeriod));
+        assert_eq!(deposit_payout(a, k, 1000, NOW, 90, 0, 0, 0, 0, 0, 100, end), Err(LogicError::ZeroAmount));
+        assert_eq!(deposit_payout(a, OfferingKind::Token, 1000, NOW, 90, 0, 0, 10, 1, 0, 100, end), Err(LogicError::NoPayoutOffering));
+        assert_eq!(deposit_payout(CampaignStatus::Raising, k, 1000, NOW, 90, 0, 0, 10, 1, 0, 100, end), Err(LogicError::InvalidStatus));
+        assert!(deposit_payout(CampaignStatus::Completed, OfferingKind::Both, 1000, NOW, 90, 0, 0, 10, 1, 0, 100, end).is_ok());
+        assert_eq!(deposit_payout(a, k, 1000, NOW, 90, 0, 0, 10, 1, 0, 0, end), Err(LogicError::NoShares));
+        let late = deposit_payout(a, k, 1000, NOW, 90, 0, 0, 10_000, 1_000, 0, 100, due).unwrap();
+        assert_eq!(late.status, PayoutStatus::Late);
+    }
+
+    #[test]
+    fn late_marking_and_default_after_three() {
+        let k = OfferingKind::Equity;
+        let mut streak = 0u8;
+        let mut next = 0u32;
+        for p in 0..3u32 {
+            let (_, _, due) = payout_period_bounds(NOW, 90, p).unwrap();
+            assert_eq!(mark_late(k, NOW, 90, next, p, streak, due - 1), Err(LogicError::PeriodNotDue));
+            assert_eq!(mark_late(k, NOW, 90, next, p + 1, streak, due + 100 * DAY), Err(LogicError::WrongPeriod));
+            streak = mark_late(k, NOW, 90, next, p, streak, due).unwrap();
+            next += 1;
+            assert_eq!(is_payout_default(streak), p == 2);
+        }
+        assert_eq!(streak, 3);
+        assert_eq!(mark_late(OfferingKind::Token, NOW, 90, 0, 0, 0, NOW + 1000 * DAY), Err(LogicError::NoPayoutOffering));
+    }
+
+    #[test]
+    fn on_time_resets_streak() {
+        let mut s = 0u8;
+        s = next_late_streak(s, PayoutStatus::Late);
+        s = next_late_streak(s, PayoutStatus::Late);
+        assert!(!is_payout_default(s));
+        s = next_late_streak(s, PayoutStatus::OnTime);
+        assert_eq!(s, 0);
+        s = next_late_streak(s, PayoutStatus::Late);
+        s = next_late_streak(s, PayoutStatus::Late);
+        assert!(!is_payout_default(s));
+        s = next_late_streak(s, PayoutStatus::Late);
+        assert!(is_payout_default(s));
+        assert_eq!(next_late_streak(u8::MAX, PayoutStatus::Late), u8::MAX);
+    }
+
+    #[test]
+    fn late_payment_of_marked_period() {
+        assert_eq!(deposit_late_marked(false, 10_000, 1_000, 1000, 0, 100).unwrap(), 10 * ACC_SCALE);
+        assert_eq!(deposit_late_marked(true, 10_000, 1_000, 1000, 0, 100), Err(LogicError::AlreadyPaid));
+        assert_eq!(deposit_late_marked(false, 10_000, 999, 1000, 0, 100), Err(LogicError::PayoutTooSmall));
+        assert_eq!(deposit_late_marked(false, 0, 0, 1000, 0, 100), Err(LogicError::ZeroAmount));
+    }
+
+    // ------------------------------------------------ tokens
+    #[test]
+    fn vesting_boundaries_no_cliff() {
+        let total = 1_200u64;
+        let l = NOW;
+        assert_eq!(vested_tokens(total, l, 0, 12, l - 1).unwrap(), 0);
+        assert_eq!(vested_tokens(total, l, 0, 12, l).unwrap(), 0);
+        assert_eq!(vested_tokens(total, l, 0, 12, l + VEST_MONTH).unwrap(), 100);
+        assert_eq!(vested_tokens(total, l, 0, 12, l + 6 * VEST_MONTH).unwrap(), 600);
+        assert_eq!(vested_tokens(total, l, 0, 12, l + 12 * VEST_MONTH - 1).unwrap(), 1_199);
+        assert_eq!(vested_tokens(total, l, 0, 12, l + 12 * VEST_MONTH).unwrap(), total);
+        assert_eq!(vested_tokens(total, l, 0, 12, l + 100 * VEST_MONTH).unwrap(), total);
+    }
+
+    #[test]
+    fn vesting_boundaries_with_cliff() {
+        let total = 1_200u64;
+        let l = NOW;
+        let cliff_end = l + 6 * VEST_MONTH;
+        assert_eq!(vested_tokens(total, l, 6, 12, cliff_end - 1).unwrap(), 0);
+        assert_eq!(vested_tokens(total, l, 6, 12, cliff_end).unwrap(), 0);
+        assert_eq!(vested_tokens(total, l, 6, 12, cliff_end + VEST_MONTH).unwrap(), 100);
+        assert_eq!(vested_tokens(total, l, 6, 12, cliff_end + 12 * VEST_MONTH).unwrap(), total);
+        // months = 0: everything at cliff end
+        assert_eq!(vested_tokens(total, l, 6, 0, cliff_end - 1).unwrap(), 0);
+        assert_eq!(vested_tokens(total, l, 6, 0, cliff_end).unwrap(), total);
+        assert_eq!(vested_tokens(total, l, 0, 0, l).unwrap(), total);
+    }
+
+    #[test]
+    fn token_claims_pro_rata() {
+        let total = token_investor_allocation(1_000_000_000, 1500).unwrap();
+        assert_eq!(total, 150_000_000);
+        let snap = 400u64;
+        let half = vested_tokens(total, NOW, 0, 12, NOW + 6 * VEST_MONTH).unwrap();
+        let a1 = token_claimable(half, 100, snap, 0).unwrap();
+        assert_eq!(a1, 18_750_000);
+        let full = vested_tokens(total, NOW, 0, 12, NOW + 12 * VEST_MONTH).unwrap();
+        let a2 = token_claimable(full, 100, snap, a1).unwrap();
+        assert_eq!(a1 + a2, 37_500_000);
+        assert_eq!(token_claimable(full, 100, snap, a1 + a2).unwrap(), 0);
+        assert_eq!(token_claimable(full, 300, snap, 0).unwrap(), 112_500_000);
+        assert_eq!(token_claimable(full, 1, 0, 0), Err(LogicError::NoShares));
+    }
+
+    #[test]
+    fn token_overdue_flag() {
+        let t = NOW;
+        assert!(!is_token_overdue(t, false, t + TOKEN_OVERDUE_GRACE - 1));
+        assert!(is_token_overdue(t, false, t + TOKEN_OVERDUE_GRACE));
+        assert!(!is_token_overdue(t, true, t + 1000 * DAY));
+        assert_eq!(TOKEN_OVERDUE_GRACE, 180 * DAY);
+    }
+
+    #[test]
+    fn register_token_rules() {
+        let a = CampaignStatus::Active;
+        assert!(check_register_token(a, OfferingKind::Token, false).is_ok());
+        assert!(check_register_token(CampaignStatus::Completed, OfferingKind::Both, false).is_ok());
+        assert_eq!(check_register_token(a, OfferingKind::Equity, false), Err(LogicError::NoTokenOffering));
+        assert_eq!(check_register_token(a, OfferingKind::Token, true), Err(LogicError::TokenAlreadyRegistered));
+        assert_eq!(check_register_token(CampaignStatus::Raising, OfferingKind::Token, false), Err(LogicError::InvalidStatus));
+    }
+
+    #[test]
+    fn enum_roundtrips() {
+        for v in 0..=2u8 {
+            assert_eq!(OfferingKind::from_u8(v).unwrap() as u8, v);
+        }
+        assert_eq!(PayoutBasis::from_u8(1).unwrap(), PayoutBasis::Profit);
+        assert_eq!(PayoutStatus::from_u8(1).unwrap(), PayoutStatus::Late);
+        assert!(PayoutStatus::from_u8(2).is_err());
     }
 }

@@ -1,4 +1,8 @@
 // Mock data layer for Harvestia. Swap these functions for the real SDK later.
+import type {
+  CampaignCategory, CampaignFlag, Offering, OfferingKind, PayoutEntry, TokenOffering,
+} from "./api-types";
+export type { CampaignCategory, CampaignFlag, Offering, OfferingKind, PayoutEntry, TokenOffering } from "./api-types";
 
 export type CampaignStatus = "Draft" | "Raising" | "Active" | "Completed" | "Failed" | "Refunding";
 export type MilestoneStatus = "Pending" | "Voting" | "Released" | "Rejected" | "Resubmitted" | "Refunded";
@@ -55,6 +59,10 @@ export interface Campaign {
   status: CampaignStatus;
   milestones: Milestone[];
   spending: SpendEntry[];
+  /** Offerings (v2) */
+  categoryKey: CampaignCategory;
+  offering: Offering;
+  flags: CampaignFlag[];
 }
 
 export interface Holding {
@@ -62,6 +70,10 @@ export interface Holding {
   amountUsdc: number;
   shares: number;
   equityPct: number;
+  /** Claimable monthly payouts (private; decrypted locally). */
+  claimablePayoutUsdc: number;
+  /** Tokens already claimed. */
+  tokensClaimed: number;
 }
 
 export interface VoteInfo {
@@ -80,7 +92,9 @@ const img = (id: string, w = 1200) =>
 const now = Date.now();
 const days = (d: number) => new Date(now + d * 86400000).toISOString();
 
-const campaigns: Campaign[] = [
+type BaseCampaign = Omit<Campaign, "categoryKey" | "offering" | "flags">;
+
+const baseCampaigns: BaseCampaign[] = [
   {
     id: "freshbox",
     founder: {
@@ -331,11 +345,106 @@ const campaigns: Campaign[] = [
   },
 ];
 
+// ---- Offerings (v2) mock fallbacks (used until the API returns these fields) ----
+const eq = (equityBps: number, basis: "revenue" | "profit", shareBps: number, startsAfterDays = 90) => ({
+  equityBps,
+  payout: { basis, shareBps, frequency: "monthly" as const, startsAfterDays },
+});
+const tok = (symbol: string, totalSupply: number, investorAllocationBps: number, launchInDays: number, cliffMonths = 0, months = 12, launched = false): TokenOffering => ({
+  symbol, totalSupply, investorAllocationBps, targetLaunchDate: days(launchInDays), vesting: { cliffMonths, months },
+  mint: launched ? "HAULm1nt7Qx4Yb2vNc3TzR8eYhJ6dA1uGoP5sNqXk2" : null,
+  launchedAt: launched ? days(-90) : null,
+});
+
+export const mockOfferings: Record<string, { categoryKey: CampaignCategory; category: string; offering: Offering; flags?: CampaignFlag[] }> = {
+  freshbox: { categoryKey: "business", category: "Business", offering: { kind: "equity", equity: eq(1000, "revenue", 800) } },
+  solgrid: { categoryKey: "crypto", category: "Crypto", offering: { kind: "both", equity: eq(1200, "revenue", 500, 180), token: tok("GRID", 100_000_000, 1500, 120, 3, 12) } },
+  medilink: { categoryKey: "saas", category: "SaaS", offering: { kind: "equity", equity: eq(800, "profit", 1500, 120) } },
+  terroir: { categoryKey: "crypto", category: "Crypto", offering: { kind: "token", token: tok("SOIL", 1_000_000_000, 2000, 60, 0, 18) } },
+  kitchenos: { categoryKey: "saas", category: "SaaS", offering: { kind: "equity", equity: eq(900, "revenue", 1000) } },
+  greenhaul: { categoryKey: "hardware", category: "Hardware", offering: { kind: "both", equity: eq(1100, "profit", 1200), token: tok("HAUL", 50_000_000, 1000, -20, 0, 12, true) } },
+};
+
+export const DEFAULT_OFFERING: Offering = { kind: "equity", equity: eq(1000, "revenue", 500) };
+
+const campaigns: Campaign[] = baseCampaigns.map((c) => {
+  const o = mockOfferings[c.id];
+  return {
+    ...c,
+    category: o?.category ?? c.category,
+    categoryKey: o?.categoryKey ?? "other",
+    offering: o?.offering ?? { kind: "equity", equity: eq(c.equityBps, "revenue", 500) },
+    flags: o?.flags ?? [],
+  };
+});
+
+const period = (monthsAgo: number) => {
+  const d = new Date(now);
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - monthsAgo);
+  return d.toISOString().slice(0, 7);
+};
+
+export const mockPayouts: Record<string, PayoutEntry[]> = {
+  freshbox: [
+    { period: period(1), basisAmountUsdc: 24_300, paidUsdc: 1_944, status: "ON_TIME", depositedAt: days(-20), txSig: "8hQe…Vb3n" },
+    { period: period(2), basisAmountUsdc: 21_050, paidUsdc: 1_684, status: "ON_TIME", depositedAt: days(-50), txSig: "2mLk…Rw7c" },
+    { period: period(3), basisAmountUsdc: 18_400, paidUsdc: 1_472, status: "LATE", depositedAt: days(-68), txSig: "6tPa…Jx2d" },
+  ],
+  greenhaul: [
+    { period: period(1), basisAmountUsdc: 9_800, paidUsdc: 1_176, status: "ON_TIME", depositedAt: days(-18), txSig: "4kRe…Ny9q" },
+  ],
+};
+
+export async function getPayouts(id: string): Promise<PayoutEntry[]> {
+  return mockPayouts[id] ?? [];
+}
+
 const holdings: Holding[] = [
-  { campaignId: "freshbox", amountUsdc: 12_500, shares: 2500, equityPct: 0.25 },
-  { campaignId: "medilink", amountUsdc: 5_000, shares: 1000, equityPct: 0.1 },
-  { campaignId: "kitchenos", amountUsdc: 3_200, shares: 640, equityPct: 0.115 },
+  { campaignId: "freshbox", amountUsdc: 12_500, shares: 2500, equityPct: 0.25, claimablePayoutUsdc: 127.5, tokensClaimed: 0 },
+  { campaignId: "medilink", amountUsdc: 5_000, shares: 1000, equityPct: 0.1, claimablePayoutUsdc: 0, tokensClaimed: 0 },
+  { campaignId: "kitchenos", amountUsdc: 3_200, shares: 640, equityPct: 0.115, claimablePayoutUsdc: 0, tokensClaimed: 0 },
+  { campaignId: "greenhaul", amountUsdc: 4_000, shares: 800, equityPct: 0.11, claimablePayoutUsdc: 15.68, tokensClaimed: 1_200 },
 ];
+
+// ---- Offering helpers (pure; safe on server and client) ----
+export const pct = (bps: number) => `${+(bps / 100).toFixed(2)}%`;
+
+export const offeringStamp = (k: OfferingKind) =>
+  k === "equity" ? "EQUITY · PAYOUTS" : k === "token" ? "TOKEN" : "EQUITY + TOKEN";
+
+export function describeOffering(o: Offering): string[] {
+  const out: string[] = [];
+  if (o.equity && o.kind !== "token") {
+    const e = o.equity;
+    out.push(
+      `Investors share ${pct(e.equityBps)} of the company and receive ${pct(e.payout.shareBps)} of monthly ${e.payout.basis}, paid monthly` +
+        (e.payout.startsAfterDays ? ` (first payout after a ${e.payout.startsAfterDays}-day grace period).` : "."),
+    );
+  }
+  if (o.token && o.kind !== "equity") {
+    const t = o.token;
+    out.push(
+      `Investors receive ${pct(t.investorAllocationBps)} of ${t.totalSupply.toLocaleString("en-US")} $${t.symbol}, ` +
+        `vesting linearly over ${t.vesting.months} months` + (t.vesting.cliffMonths ? ` after a ${t.vesting.cliffMonths}-month cliff` : "") +
+        ` from launch (target ${t.targetLaunchDate.slice(0, 10)}).`,
+    );
+  }
+  return out;
+}
+
+/** Fraction of the investor pool an amount buys (pro-rata to the raise goal). */
+export const poolFraction = (amountUsdc: number, goalUsdc: number) => (goalUsdc > 0 ? Math.max(0, amountUsdc) / goalUsdc : 0);
+
+/** Linear vesting fraction in [0,1] at `atMs`. */
+export function vestedFraction(t: TokenOffering, atMs: number): number {
+  if (!t.launchedAt) return 0;
+  const monthsElapsed = (atMs - new Date(t.launchedAt).getTime()) / (30 * 86400000);
+  if (monthsElapsed < t.vesting.cliffMonths) return 0;
+  return Math.min(1, Math.max(0, monthsElapsed / Math.max(1, t.vesting.months)));
+}
+
+export const MOCK_NOW = now;
 
 const votes: VoteInfo[] = [
   {

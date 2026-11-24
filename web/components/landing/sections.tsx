@@ -45,7 +45,7 @@ export function Marquee() {
 }
 
 const steps = [
-  { t: "Founder lists", d: "A public founder posts the plan, equity offered and milestones with release amounts." },
+  { t: "Founder lists", d: "A public founder (any startup: business, brand, SaaS or crypto) posts the plan, what investors get and milestones with release amounts." },
   { t: "You invest privately", d: "Deposit USDC through a shielded pool. Your amount and wallet never appear on-chain." },
   { t: "Vote on milestones", d: "Founders submit evidence. Investors vote in secret, weighted by hidden stake." },
   { t: "Release or refund", d: "Yes releases the tranche. Missed milestones return remaining funds pro-rata." },
@@ -192,7 +192,55 @@ export function Campaigns() {
   );
 }
 
+const payback = [
+  {
+    k: "A",
+    t: "Equity + monthly payouts",
+    stamp: "EQUITY · PAYOUTS",
+    d: "You own a slice of the company. Every month the founder pays a fixed share of revenue or profit into a public pool, and you claim your cut privately. Late months get a public LATE stamp.",
+    ex: "e.g. 10% of the company, 8% of monthly revenue paid out",
+  },
+  {
+    k: "B",
+    t: "Token",
+    stamp: "TOKEN",
+    d: "For crypto projects. A fixed share of the token supply is reserved for investors and vests month by month after launch. Miss the launch date by six months and the campaign is flagged overdue.",
+    ex: "e.g. 15% of 100M $GRID, 12-month vesting",
+  },
+  {
+    k: "C",
+    t: "Both",
+    stamp: "EQUITY + TOKEN",
+    d: "Equity with monthly payouts and a token allocation, both split by your share. Suits a business that also launches a token.",
+    ex: "e.g. 12% equity + 5% of revenue + 15% of tokens",
+  },
+];
+
+export function PayBack() {
+  return (
+    <section id="payback" className="px-4 py-20 sm:py-28">
+      <SectionHead num="02B" eyebrow="Choose how you pay back" title={<>Equity, tokens, <Serif>or both.</Serif></>} sub="Founders pick what investors get. Milestone safe, private votes, refunds and exits work the same for all three." />
+      <div className="mx-auto mt-14 grid max-w-6xl border-2 border-ink md:grid-cols-3">
+        {payback.map((p, i) => (
+          <article key={p.k} className={`flex flex-col p-6 ${i > 0 ? "border-t-2 border-ink md:border-l-2 md:border-t-0" : ""}`}>
+            <div className="flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.12em]">
+              <span className="font-semibold">Option {p.k}</span>
+              <span className="stamp bg-ink text-paper !border-ink">{p.stamp}</span>
+            </div>
+            <h3 className="w-cond mt-5 text-3xl font-black uppercase leading-none">{p.t}</h3>
+            <p className="mt-4 flex-1 text-[15px] leading-relaxed text-muted">{p.d}</p>
+            <p className="mt-5 border-t border-ink pt-3 font-mono text-xs uppercase tracking-[0.06em]">{p.ex}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const faqs = [
+  ["Who can raise on Harvestia?", "Any startup: a local business, a consumer brand, a SaaS company, hardware, creators, or a crypto project. Founders are public and KYC-verified; investors stay private."],
+  ["What do investors actually get?", "The founder chooses: equity with monthly payouts (a set share of revenue or profit, paid every month), a token allocation that vests after launch, or both. The terms are shown on every campaign page."],
+  ["How do monthly payouts work?", "Each month the founder deposits the payout in USDC with a public report. You claim your pro-rata share privately. A missed month is marked LATE; three in a row flags the campaign and opens an extra exit vote."],
   ["Is my investment really private?", "Yes. Amounts move through Helius privacy rings and a shielded pool; votes are tallied by Arcium MPC. Only the public total raised is visible."],
   ["What happens if a founder misses a milestone?", "Investors vote No. Founders get one 30-day resubmission. If it fails again, all remaining locked funds are refunded pro-rata."],
   ["Do I need KYC?", "Yes, once. Documents are sealed in a TEE vault and you receive a reusable ZK credential. Founders never see who you are."],

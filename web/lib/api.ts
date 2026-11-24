@@ -2,7 +2,8 @@
 export * from "./api-types";
 import type {
   Campaign, CreateCampaignInput, EvidenceInput, FinalizeResult, InvestInput, InvestResult,
-  Milestone, Portfolio, SpendEntry, SpendingInput, VoteInput, VoteRound,
+  Milestone, Portfolio, PayoutEntry, PayoutLedger, PayoutDepositInput, PayoutClaimInput, EncryptedClaim,
+  RegisterTokenInput, TokenClaimInput, TokenOffering, SpendEntry, SpendingInput, VoteInput, VoteRound,
 } from "./api-types";
 
 export interface ClientOptions {
@@ -47,6 +48,15 @@ export function createClient(opts: ClientOptions = {}) {
     finalizeVote: (id: string, idx: number, opts2: { force?: boolean } = {}) =>
       req<FinalizeResult>("POST", `/campaigns/${encodeURIComponent(id)}/milestones/${idx}/finalize`, opts2),
     addSpending: (id: string, input: SpendingInput) => req<SpendEntry>("POST", `/campaigns/${encodeURIComponent(id)}/spending`, input),
+    depositPayout: (id: string, input: PayoutDepositInput) =>
+      req<PayoutEntry>("POST", `/campaigns/${encodeURIComponent(id)}/payouts`, input),
+    listPayouts: (id: string) => req<PayoutLedger | PayoutEntry[]>("GET", `/campaigns/${encodeURIComponent(id)}/payouts`),
+    claimPayout: (id: string, input: PayoutClaimInput) =>
+      req<EncryptedClaim>("POST", `/campaigns/${encodeURIComponent(id)}/payouts/claim`, input),
+    registerToken: (id: string, input: RegisterTokenInput) =>
+      req<TokenOffering>("POST", `/campaigns/${encodeURIComponent(id)}/token`, input),
+    claimTokens: (id: string, input: TokenClaimInput) =>
+      req<EncryptedClaim>("POST", `/campaigns/${encodeURIComponent(id)}/token/claim`, input),
     getPortfolio: (viewKeyHash: string) => req<Portfolio>("GET", `/portfolio/${encodeURIComponent(viewKeyHash)}`),
   };
 }
@@ -64,6 +74,11 @@ export const castVote = defaultClient.castVote;
 export const submitEvidence = defaultClient.submitEvidence;
 export const finalizeVote = defaultClient.finalizeVote;
 export const getPortfolio = defaultClient.getPortfolio;
+export const depositPayout = defaultClient.depositPayout;
+export const listPayouts = defaultClient.listPayouts;
+export const claimPayout = defaultClient.claimPayout;
+export const registerToken = defaultClient.registerToken;
+export const claimTokens = defaultClient.claimTokens;
 
 // ---- Mock client-side encryption helpers (stand-ins for Arcium/ZK client libs) ----
 // "mockenc1:" payloads are NOT secure; they let the local mock Arcium cluster decrypt.

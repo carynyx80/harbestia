@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { investPrivately, errorMessage, fmtUsdFull } from "@/lib/data";
+import { investPrivately, errorMessage, fmtUsdFull, poolFraction, type Offering, type PayoutEntry } from "@/lib/data";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldCheck, Lock, Check, Loader2 } from "lucide-react";
 import { Card, btnPrimary } from "./primitives";
@@ -14,6 +14,8 @@ export default function InvestPanel({
   equityBps,
   goalUsdc,
   name,
+  offering,
+  payouts = [],
 }: {
   campaignId: string;
   status: string;
@@ -21,11 +23,19 @@ export default function InvestPanel({
   equityBps: number;
   goalUsdc: number;
   name: string;
+  offering?: Offering;
+  payouts?: PayoutEntry[];
 }) {
   const [amount, setAmount] = useState("2500");
   const [state, setState] = useState<"idle" | "pending" | "done">("idle");
   const n = Number(amount.replace(/[^0-9.]/g, "")) || 0;
-  const equity = (n / goalUsdc) * (equityBps / 100);
+  const frac = poolFraction(n, goalUsdc);
+  const eqTerms = offering && offering.kind !== "token" ? offering.equity : undefined;
+  const tokTerms = offering && offering.kind !== "equity" ? offering.token : undefined;
+  const equity = frac * ((eqTerms?.equityBps ?? equityBps) / 100);
+  const lastPaid = payouts[0]?.paidUsdc;
+  const monthlyShare = lastPaid !== undefined ? frac * lastPaid : undefined;
+  const tokenAlloc = tokTerms ? Math.floor((frac * tokTerms.totalSupply * tokTerms.investorAllocationBps) / 10000) : 0;
 
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -75,10 +85,30 @@ export default function InvestPanel({
         ))}
       </div>
       <dl className="mt-4 space-y-2 text-sm">
-        <div className="flex justify-between text-muted">
-          <dt>Est. equity</dt>
-          <dd className="font-medium text-ink">{equity.toFixed(3)}%</dd>
-        </div>
+        {(!offering || eqTerms) && (
+          <div className="flex justify-between text-muted">
+            <dt>Est. equity</dt>
+            <dd className="font-medium text-ink">{equity.toFixed(3)}%</dd>
+          </div>
+        )}
+        {eqTerms && (
+          <div className="flex justify-between gap-3 text-muted">
+            <dt>Your share of monthly payouts ≈</dt>
+            <dd className="text-right font-medium text-ink">
+              {monthlyShare !== undefined ? `${fmtUsdFull(Math.round(monthlyShare * 100) / 100)}/mo` : `${(frac * 100).toFixed(3)}% of pool`}
+              <span className="block text-[10px] text-muted">{(eqTerms.payout.shareBps / 100).toFixed(1)}% of {eqTerms.payout.basis}{monthlyShare !== undefined ? ", at last month’s rate" : ""}</span>
+            </dd>
+          </div>
+        )}
+        {tokTerms && (
+          <div className="flex justify-between gap-3 text-muted">
+            <dt>Your token allocation ≈</dt>
+            <dd className="text-right font-medium text-ink">
+              {tokenAlloc.toLocaleString("en-US")} ${tokTerms.symbol}
+              <span className="block text-[10px] text-muted">vests over {tokTerms.vesting.months} mo{tokTerms.vesting.cliffMonths ? `, ${tokTerms.vesting.cliffMonths}-mo cliff` : ""}</span>
+            </dd>
+          </div>
+        )}
         <div className="flex justify-between text-muted">
           <dt>Released upfront</dt>
           <dd className="text-ink">20%</dd>
@@ -90,7 +120,7 @@ export default function InvestPanel({
       </dl>
       <div className="mt-4 flex gap-2.5 border border-ink bg-signal/15 p-3 text-xs leading-relaxed text-signal-ink">
         <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        Your amount is shielded via Helius Privacy Ring. Only the public total updates.
+        Preview mode: amounts are not encrypted yet. Helius Privacy Rings will hide them before launch.
       </div>
       <button onClick={invest} disabled={state !== "idle"} className={`${btnPrimary} mt-4 w-full py-3`}>
         <AnimatePresence mode="wait" initial={false}>

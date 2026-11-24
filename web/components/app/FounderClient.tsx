@@ -6,7 +6,8 @@ import { Plus, Trash2, Rocket, Upload, Receipt, Check, Link2 } from "lucide-reac
 import { Card, FadeIn, SectionTitle, inputCls, btnPrimary, btnGhost, StatusChip } from "./primitives";
 import type { MilestoneStatus } from "@/lib/data";
 import { useRouter } from "next/navigation";
-import { createCampaign, submitEvidence, recordSpending, errorMessage } from "@/lib/data";
+import { createCampaign, submitEvidence, recordSpending, errorMessage, type CampaignCategory } from "@/lib/data";
+import OfferingBuilder, { CATEGORIES, defaultOfferingForm, toOffering, validateOffering, type OfferingForm } from "./OfferingBuilder";
 
 type MRow = { title: string; amount: string; deadline: string };
 
@@ -37,7 +38,8 @@ export default function FounderClient({
 }) {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("500000");
-  const [equity, setEquity] = useState("10");
+  const [category, setCategory] = useState<CampaignCategory>("business");
+  const [offer, setOffer] = useState<OfferingForm>(defaultOfferingForm);
   const [ms, setMs] = useState<MRow[]>([
     { title: "App live", amount: "150000", deadline: "" },
     { title: "1,000 paying customers", amount: "150000", deadline: "" },
@@ -60,8 +62,13 @@ export default function FounderClient({
 
   const onCreate = async () => {
     setCreateErr(null);
+    const offerErrors = validateOffering(offer);
+    if (offerErrors.length) return setCreateErr(offerErrors[0]);
+    const offering = toOffering(offer);
     try {
       const c = await createCampaign({
+        category,
+        offering,
         founder: DEMO_FOUNDER,
         name: name || "Untitled startup",
         tagline: `${name || "Untitled startup"} — milestone-based raise on Harvestia.`,
@@ -69,7 +76,7 @@ export default function FounderClient({
         solution: "Described in the founder data room.",
         useOfFunds: ms.map((m) => m.title).filter(Boolean),
         goalUsdc: goalN,
-        equityBps: Math.round((Number(equity) || 0) * 100),
+        equityBps: offering.equity?.equityBps ?? 0,
         raiseDeadline: inDays(45),
         milestones: ms.map((m, i) => ({
           title: m.title || `Milestone ${i + 1}`,
@@ -134,10 +141,16 @@ export default function FounderClient({
               <input className={inputCls} inputMode="numeric" value={goal} onChange={(e) => setGoal(e.target.value)} />
             </div>
             <div>
-              <Label>Investor equity (%)</Label>
-              <input className={inputCls} inputMode="decimal" value={equity} onChange={(e) => setEquity(e.target.value)} />
+              <Label>Category</Label>
+              <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value as CampaignCategory)}>
+                {CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
             </div>
           </div>
+
+          <OfferingBuilder value={offer} onChange={setOffer} />
 
           <div className="mt-6 flex items-center justify-between">
             <div className="text-sm font-medium text-ink">Milestones</div>

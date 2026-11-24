@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { MapPin, BadgeCheck, ExternalLink, DoorOpen, Lock, Unlock, ArrowLeft, Vote } from "lucide-react";
-import { getCampaign, fmtUsd, fmtUsdFull, shortKey, type MilestoneStatus } from "@/lib/data";
+import { getCampaign, getPayouts, offeringStamp, fmtUsd, fmtUsdFull, shortKey, type MilestoneStatus } from "@/lib/data";
 import { Card, FadeIn, SectionTitle, StatusChip, ProgressBar } from "@/components/app/primitives";
 import InvestPanel from "@/components/app/InvestPanel";
+import OfferingBlocks from "@/components/app/OfferingBlocks";
 
 export async function generateStaticParams() {
   const { getCampaigns } = await import("@/lib/mock");
@@ -17,6 +18,7 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
   await connection();
   const c = await getCampaign(id);
   if (!c) notFound();
+  const payouts = await getPayouts(c.id);
 
   const upfront = (c.goalUsdc * c.upfrontBps) / 10000;
   const released = upfront + c.milestones.filter((m) => m.status === "Released").reduce((a, m) => a + m.releaseUsdc, 0);
@@ -48,7 +50,7 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
               <span className="stamp">{c.category}</span>
               <span className="stamp bg-signal text-ink !border-ink">{c.status}</span>
               <span className="stamp text-navy">
-                {c.equityBps / 100}% equity offered
+                {offeringStamp(c.offering.kind)}
               </span>
             </div>
             <h1 className="w-cond mt-4 text-5xl font-black uppercase leading-[0.9] text-ink md:text-7xl">{c.name}</h1>
@@ -107,6 +109,10 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
               <SectionTitle kicker="Solution">What {c.name} builds</SectionTitle>
               <p className="text-sm leading-relaxed text-muted">{c.solution}</p>
             </Card>
+          </FadeIn>
+
+          <FadeIn delay={0.18} className="space-y-6">
+            <OfferingBlocks offering={c.offering} payouts={payouts} flags={c.flags} />
           </FadeIn>
 
           {/* Use of funds */}
@@ -250,7 +256,7 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
         {/* Sidebar */}
         <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
           <FadeIn delay={0.15}>
-            <InvestPanel campaignId={c.id} status={c.status} raisedUsdc={c.raisedUsdc} equityBps={c.equityBps} goalUsdc={c.goalUsdc} name={c.name} />
+            <InvestPanel campaignId={c.id} status={c.status} raisedUsdc={c.raisedUsdc} equityBps={c.equityBps} goalUsdc={c.goalUsdc} name={c.name} offering={c.offering} payouts={payouts} />
           </FadeIn>
           <FadeIn delay={0.2}>
             <Card className="p-5">

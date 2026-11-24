@@ -11,14 +11,20 @@ import {
   type VoteRound,
 } from "./api";
 import * as mock from "./mock";
-import type { Campaign, Holding, VoteInfo, FounderProfile } from "./mock";
+import type { Campaign, Holding, VoteInfo, FounderProfile, PayoutEntry, CampaignCategory, Offering } from "./mock";
 
 export type { Campaign, Holding, VoteInfo, Milestone, MilestoneStatus, CampaignStatus, SpendEntry } from "./mock";
-export { fmtUsd, fmtUsdFull, shortKey, refundsClaimable } from "./mock";
+export { fmtUsd, fmtUsdFull, shortKey, refundsClaimable, pct, offeringStamp, describeOffering, poolFraction, vestedFraction } from "./mock";
+export type { CampaignCategory, Offering, OfferingKind, PayoutEntry, TokenOffering, CampaignFlag } from "./mock";
+
+const CATEGORY_LABEL: Record<string, string> = {
+  business: "Business", crypto: "Crypto", consumer: "Consumer", saas: "SaaS", hardware: "Hardware", creator: "Creator", other: "Other",
+};
 
 /** Call only in dynamic (post-connection) server code or client effects. */
 export const msUntil = (iso: string) => new Date(iso).getTime() - Date.now();
 export const daysUntil = (iso: string) => Math.max(0, Math.ceil(msUntil(iso) / 86400000));
+export const currentMs = () => Date.now();
 
 export type DataSource = "live" | "demo";
 
@@ -53,7 +59,10 @@ function toUi(c: ApiCampaign, all: Campaign[]): Campaign {
     founder,
     name: c.name,
     tagline: c.tagline,
-    category: m?.category ?? "Startup",
+    category: c.category ? CATEGORY_LABEL[c.category] ?? c.category : m?.category ?? "Startup",
+    categoryKey: c.category ?? m?.categoryKey ?? "other",
+    offering: c.offering ?? m?.offering ?? { kind: "equity", equity: { equityBps: c.equityBps, payout: { basis: "revenue", shareBps: 500, frequency: "monthly", startsAfterDays: 90 } } },
+    flags: c.flags ?? m?.flags ?? [],
     image: m?.image ?? FALLBACK_IMAGE,
     problem: c.problem,
     solution: c.solution,
@@ -125,6 +134,21 @@ export async function getCampaign(id: string): Promise<CampaignView | undefined>
   const { detail, source } = await getDetail(id);
   if (source === "demo") return mock.getCampaign(id);
   return detail ? { ...toUi(detail, await mockList()), lockedUsdc: detail.lockedUsdc, founderUpfrontUsdc: detail.founderUpfrontUsdc } : undefined;
+}
+
+/** Public monthly payout ledger; falls back to mock rows when the API lacks the endpoint. */
+export async function getPayouts(id: string): Promise<PayoutEntry[]> {
+  try {
+    const res = await api.listPayouts(id);
+    const rows = Array.isArray(res) ? res : res?.entries ?? [];
+    if (!rows.length) return mock.getPayouts(id);
+    // Normalize: label periods "YYYY-MM", newest first.
+    return rows
+      .map((r) => ({ ...r, period: r.periodStart ? r.periodStart.slice(0, 7) : typeof r.period === "number" ? `P${r.period}` : r.period }))
+      .sort((a, b) => String(b.periodStart ?? b.period).localeCompare(String(a.periodStart ?? a.period)));
+  } catch {
+    return mock.getPayouts(id);
+  }
 }
 
 function voteFromRound(c: ApiCampaignDetail, r: VoteRound, all: Campaign[]): VoteInfo {
@@ -207,7 +231,25 @@ export async function recordSpending(campaignId: string, input: { description: s
   return browserApi.addSpending(campaignId, input);
 }
 
+export async function depositPayout(campaignId: string, input: { period: number; basisAmountUsdc: number; amountUsdc: number }) {
+  return browserApi.depositPayout(campaignId, input);
+}
+
+export async function claimPayout(campaignId: string, positionCommitment = randomHex(32)) {
+  return browserApi.claimPayout(campaignId, { positionCommitment, proof: "mockproof:" + randomHex(8) });
+}
+
+export async function registerToken(campaignId: string, mint: string, depositAmount: number) {
+  return browserApi.registerToken(campaignId, { mint, depositAmount });
+}
+
+export async function claimTokens(campaignId: string, positionCommitment = randomHex(32)) {
+  return browserApi.claimTokens(campaignId, { positionCommitment, proof: "mockproof:" + randomHex(8) });
+}
+
 export async function createCampaign(input: {
+  category?: CampaignCategory;
+  offering?: Offering;
   founder: string;
   name: string;
   tagline: string;

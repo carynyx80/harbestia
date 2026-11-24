@@ -17,7 +17,7 @@ use anchor_spl::token_interface::{
 };
 
 pub mod logic;
-use logic::{CampaignStatus as CS, LogicError, MilestoneStatus as MS, RaiseOutcome, VoteOutcome};
+use logic::{CampaignStatus as CS, LogicError, MilestoneStatus as MS, OfferingKind, PayoutStatus, RaiseOutcome, VoteOutcome};
 
 declare_id!("7GQB4kUqwvuNNFGYyyKq2W6346oHNMvHudQnHXXkofnV");
 
@@ -61,6 +61,25 @@ pub mod harvestia {
             now,
         )
         .map_err(err)?;
+        // Offerings (v2): category + offering kind with matching equity/token blocks.
+        let eq_terms = args.offering.equity.as_ref().map(|e| logic::EquityTerms {
+            equity_bps: e.equity_bps,
+            basis: e.basis,
+            share_bps: e.share_bps,
+            starts_after_days: e.starts_after_days,
+        });
+        let tok_terms = args.offering.token.as_ref().map(|t| logic::TokenTerms {
+            symbol: &t.symbol,
+            total_supply: t.total_supply,
+            investor_allocation_bps: t.investor_allocation_bps,
+            target_launch_date: t.target_launch_date,
+            cliff_months: t.cliff_months,
+            months: t.months,
+        });
+        let kind = logic::validate_offering(
+            args.category, args.offering.kind, eq_terms.as_ref(), tok_terms.as_ref(), args.equity_bps, now,
+        )
+        .map_err(err)?;
 
         let config = &mut ctx.accounts.config;
         let c = &mut ctx.accounts.campaign;
@@ -83,9 +102,30 @@ pub mod harvestia {
         for (i, m) in args.milestones.iter().enumerate() {
             c.milestones[i] = Milestone { release_usdc: m.release_usdc, deadline: m.deadline, ..Default::default() };
         }
+        c.category = args.category;
+        c.offering_kind = kind as u8;
+        if let Some(e) = &args.offering.equity {
+            c.equity_terms = EquityTermsState {
+                equity_bps: e.equity_bps, basis: e.basis, share_bps: e.share_bps, starts_after_days: e.starts_after_days,
+            };
+        }
+        if let Some(t) = &args.offering.token {
+            c.token_terms = TokenTermsState {
+                symbol: t.symbol.clone(),
+                total_supply: t.total_supply,
+                investor_allocation_bps: t.investor_allocation_bps,
+                target_launch_date: t.target_launch_date,
+                cliff_months: t.cliff_months,
+                months: t.months,
+                ..Default::default()
+            };
+        }
         c.bump = ctx.bumps.campaign;
         c.vault_bump = ctx.bumps.vault;
-        emit!(CampaignCreated { campaign: c.key(), founder: c.founder, goal: c.goal, equity_bps: c.equity_bps });
+        emit!(CampaignCreated {
+            campaign: c.key(), founder: c.founder, goal: c.goal, equity_bps: c.equity_bps,
+            category: c.category, offering_kind: c.offering_kind,
+        });
         Ok(())
     }
 
@@ -163,6 +203,8 @@ pub mod harvestia {
                 c.founder_shares_total = founder_shares_total;
                 // SPEC rule 4: lockup_ends_at = close time + 365 days, enforced by harvestia-hook.
                 c.lockup_ends_at = lockup_ends_at;
+                // Offerings (v2): payout periods and token deadlines count from activation.
+                c.activated_at = now;
                 emit!(RaiseClosed { campaign: key, success: true, founder_net, fee });
             }
         }
@@ -189,6 +231,10 @@ pub mod harvestia {
         // In Refunding the position's stake = deposit if shares not yet claimed, else held shares.
         let stake = if p.shares_claimed { p.shares } else { p.deposit.saturating_sub(p.exited_shares) };
         let amount = logic::refund_amount(st(c.status)?, p.deposit, stake, c.locked, c.outstanding_shares).map_err(err)?;
+        // Offerings (v2): pay accrued payouts on the current stake BEFORE the shares go away.
+        settle_payout(c, &mut ctx.accounts.position, stake, 0, ctx.accounts.payout_pool.as_deref(),
+            &ctx.accounts.usdc_mint, &ctx.accounts.investor_usdc, &ctx.accounts.usdc_program)?;
+        let c = &ctx.accounts.campaign;
         vault_transfer(c, &ctx.accounts.vault, &ctx.accounts.usdc_mint, &ctx.accounts.investor_usdc, &ctx.accounts.usdc_program, amount)?;
         let key = c.key();
         let c = &mut ctx.accounts.campaign;
@@ -297,6 +343,12 @@ pub mod harvestia {
         require!(p.shares_claimed, HarvestiaError::InvalidStatus);
         let amount = logic::exit_amount(st(c.status)?, now, c.vote_finalized_at, c.exit_window_end, shares, p.shares, c.locked, c.outstanding_shares)
             .map_err(err)?;
+        // Offerings (v2): claim pending payouts on the full stake, then reset debt to the post-burn stake.
+        let remaining = logic::sub(p.shares, shares).map_err(err)?;
+        let held = p.shares;
+        settle_payout(c, &mut ctx.accounts.position, held, remaining, ctx.accounts.payout_pool.as_deref(),
+            &ctx.accounts.usdc_mint, &ctx.accounts.investor_usdc, &ctx.accounts.usdc_program)?;
+        let c = &ctx.accounts.campaign;
         token_interface::burn(
             CpiContext::new(
                 ctx.accounts.share_program.to_account_info(),
@@ -341,6 +393,216 @@ pub mod harvestia {
         emit!(SpendingRecorded { campaign: c.key(), amount, category, memo_uri, total_spent: c.spent });
         Ok(())
     }
+
+    // ============================================================ Offerings (v2)
+
+    /// Founder deposits the monthly payout for `period` with its public report.
+    /// Requires `amount >= gross_amount * share_bps / 10000`. The PayoutPeriod PDA is
+    /// the public ledger row (ON_TIME / LATE vs due = period end + 15 days).
+    /// A period already marked LATE (unpaid) may still be paid late; it stays LATE.
+    pub fn deposit_payout(ctx: Context<DepositPayout>, period: u32, gross_amount: u64, amount: u64) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let c = &ctx.accounts.campaign;
+        let kind = OfferingKind::from_u8(c.offering_kind).map_err(err)?;
+        let rec = &ctx.accounts.payout_period;
+        let is_new = rec.campaign == Pubkey::default();
+        let (status, new_acc, due) = if is_new {
+            let d = logic::deposit_payout(
+                st(c.status)?, kind, c.equity_terms.share_bps, c.activated_at, c.equity_terms.starts_after_days,
+                c.next_payout_period, period, gross_amount, amount, c.acc_payout_per_share, c.outstanding_shares, now,
+            )
+            .map_err(err)?;
+            (d.status, d.new_acc, d.due)
+        } else {
+            require!(rec.period == period, HarvestiaError::WrongPeriod);
+            let a = logic::deposit_late_marked(rec.paid, gross_amount, amount, c.equity_terms.share_bps,
+                c.acc_payout_per_share, c.outstanding_shares).map_err(err)?;
+            (PayoutStatus::Late, a, rec.due)
+        };
+        token_interface::transfer_checked(
+            CpiContext::new(
+                ctx.accounts.usdc_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.founder_usdc.to_account_info(),
+                    mint: ctx.accounts.usdc_mint.to_account_info(),
+                    to: ctx.accounts.payout_pool.to_account_info(),
+                    authority: ctx.accounts.founder.to_account_info(),
+                },
+            ),
+            amount,
+            ctx.accounts.usdc_mint.decimals,
+        )?;
+        let key = ctx.accounts.campaign.key();
+        let c = &mut ctx.accounts.campaign;
+        c.acc_payout_per_share = new_acc;
+        c.payout_pool = ctx.accounts.payout_pool.key();
+        c.payout_deposited = logic::add(c.payout_deposited, amount).map_err(err)?;
+        if is_new {
+            c.next_payout_period = c.next_payout_period.checked_add(1).ok_or(HarvestiaError::MathOverflow)?;
+            c.late_streak = logic::next_late_streak(c.late_streak, status);
+            flag_default_if_needed(c, now)?;
+        }
+        let r = &mut ctx.accounts.payout_period;
+        r.campaign = key;
+        r.period = period;
+        r.due = due;
+        r.gross_amount = gross_amount;
+        r.amount = amount;
+        r.paid = true;
+        r.paid_at = now;
+        r.status = status as u8;
+        r.bump = ctx.bumps.payout_period;
+        emit!(PayoutDeposited { campaign: key, period, gross_amount, amount, status: status as u8, late_streak: c.late_streak });
+        Ok(())
+    }
+
+    /// Permissionless: publicly mark the next unsettled period LATE once its due date
+    /// passed without a deposit. 3 consecutive LATE periods -> `PayoutDefault` flag and
+    /// an extra 7-day exit window on remaining locked funds.
+    pub fn mark_late(ctx: Context<MarkLate>, period: u32) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let c = &ctx.accounts.campaign;
+        require!(c.status == CS::Active as u8 || c.status == CS::Completed as u8, HarvestiaError::InvalidStatus);
+        let kind = OfferingKind::from_u8(c.offering_kind).map_err(err)?;
+        let streak = logic::mark_late(kind, c.activated_at, c.equity_terms.starts_after_days, c.next_payout_period, period, c.late_streak, now)
+            .map_err(err)?;
+        let (_, _, due) = logic::payout_period_bounds(c.activated_at, c.equity_terms.starts_after_days, period).map_err(err)?;
+        let key = c.key();
+        let c = &mut ctx.accounts.campaign;
+        c.late_streak = streak;
+        c.next_payout_period = c.next_payout_period.checked_add(1).ok_or(HarvestiaError::MathOverflow)?;
+        flag_default_if_needed(c, now)?;
+        let r = &mut ctx.accounts.payout_period;
+        r.campaign = key;
+        r.period = period;
+        r.due = due;
+        r.paid = false;
+        r.status = PayoutStatus::Late as u8;
+        r.bump = ctx.bumps.payout_period;
+        emit!(PayoutMarkedLate { campaign: key, period, late_streak: streak, payout_default: c.flags & logic::FLAG_PAYOUT_DEFAULT != 0 });
+        Ok(())
+    }
+
+    /// Investor claims accrued payouts: shares × accPerShare − payoutDebt.
+    /// PRIVATE BUILD: amount routed via Helius Rings, pro-rata math via Arcium.
+    pub fn claim_payout(ctx: Context<ClaimPayout>) -> Result<()> {
+        let c = &ctx.accounts.campaign;
+        let stake = position_stake(&ctx.accounts.position);
+        require!(!ctx.accounts.position.refunded, HarvestiaError::InvalidStatus);
+        let pending = logic::pending_payout(stake, c.acc_payout_per_share, ctx.accounts.position.payout_debt).map_err(err)?;
+        require!(pending > 0, HarvestiaError::NothingToClaim);
+        settle_payout(c, &mut ctx.accounts.position, stake, stake, Some(&ctx.accounts.payout_pool),
+            &ctx.accounts.usdc_mint, &ctx.accounts.investor_usdc, &ctx.accounts.usdc_program)?;
+        emit!(PayoutClaimed { campaign: c.key() });
+        Ok(())
+    }
+
+    /// Founder registers the launched token mint and deposits the investor allocation
+    /// (total_supply × investor_allocation_bps) into the TokenVault PDA. Launch time = now.
+    pub fn register_token(ctx: Context<RegisterToken>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let c = &ctx.accounts.campaign;
+        let kind = OfferingKind::from_u8(c.offering_kind).map_err(err)?;
+        logic::check_register_token(st(c.status)?, kind, c.token_terms.mint != Pubkey::default()).map_err(err)?;
+        require!(c.outstanding_shares > 0, HarvestiaError::NoShares);
+        let alloc = logic::token_investor_allocation(c.token_terms.total_supply, c.token_terms.investor_allocation_bps).map_err(err)?;
+        token_interface::transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TransferChecked {
+                    from: ctx.accounts.founder_token.to_account_info(),
+                    mint: ctx.accounts.token_mint.to_account_info(),
+                    to: ctx.accounts.token_vault.to_account_info(),
+                    authority: ctx.accounts.founder.to_account_info(),
+                },
+            ),
+            alloc,
+            ctx.accounts.token_mint.decimals,
+        )?;
+        let c = &mut ctx.accounts.campaign;
+        c.token_terms.mint = ctx.accounts.token_mint.key();
+        c.token_terms.vault = ctx.accounts.token_vault.key();
+        c.token_terms.launched_at = now;
+        c.token_terms.deposited = alloc;
+        c.token_terms.snapshot_shares = c.outstanding_shares;
+        emit!(TokenRegistered { campaign: c.key(), mint: c.token_terms.mint, deposited: alloc });
+        Ok(())
+    }
+
+    /// Investor claims vested tokens pro-rata to shares (linear after the cliff from launch).
+    pub fn claim_tokens(ctx: Context<ClaimTokens>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let c = &ctx.accounts.campaign;
+        let t = &c.token_terms;
+        require!(t.mint != Pubkey::default(), HarvestiaError::TokenNotRegistered);
+        let p = &ctx.accounts.position;
+        require!(!p.refunded, HarvestiaError::InvalidStatus);
+        let vested = logic::vested_tokens(t.deposited, t.launched_at, t.cliff_months, t.months, now).map_err(err)?;
+        let amount = logic::token_claimable(vested, position_stake(p), t.snapshot_shares, p.tokens_claimed).map_err(err)?;
+        require!(amount > 0, HarvestiaError::NothingToClaim);
+        vault_transfer(c, &ctx.accounts.token_vault, &ctx.accounts.token_mint, &ctx.accounts.investor_token,
+            &ctx.accounts.token_program, amount)?;
+        let key = c.key();
+        let p = &mut ctx.accounts.position;
+        p.tokens_claimed = logic::add(p.tokens_claimed, amount).map_err(err)?;
+        emit!(TokensClaimed { campaign: key });
+        Ok(())
+    }
+
+    /// Permissionless: flag `TokenOverdue` if the token hasn't launched by target + 180 days.
+    pub fn flag_token_overdue(ctx: Context<Permissionless>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let c = &mut ctx.accounts.campaign;
+        let kind = OfferingKind::from_u8(c.offering_kind).map_err(err)?;
+        require!(kind.has_token(), HarvestiaError::NoTokenOffering);
+        require!(
+            logic::is_token_overdue(c.token_terms.target_launch_date, c.token_terms.mint != Pubkey::default(), now),
+            HarvestiaError::InvalidStatus
+        );
+        c.flags |= logic::FLAG_TOKEN_OVERDUE;
+        emit!(TokenOverdue { campaign: c.key() });
+        Ok(())
+    }
+}
+
+fn position_stake(p: &Position) -> u64 {
+    if p.shares_claimed { p.shares } else { p.deposit.saturating_sub(p.exited_shares) }
+}
+
+/// 3 consecutive LATE periods -> sticky `PayoutDefault` flag + extra exit window on locked funds.
+fn flag_default_if_needed(c: &mut Campaign, now: i64) -> Result<()> {
+    if logic::is_payout_default(c.late_streak) && c.flags & logic::FLAG_PAYOUT_DEFAULT == 0 {
+        c.flags |= logic::FLAG_PAYOUT_DEFAULT;
+        if c.status == CS::Active as u8 {
+            c.vote_finalized_at = now;
+            c.exit_window_end = logic::add_ts(now, logic::EXIT_WINDOW).map_err(err)?;
+        }
+        emit!(PayoutDefault { campaign_id: c.id, founder: c.founder });
+    }
+    Ok(())
+}
+
+/// Pays pending payouts for `stake_before` and resets debt to `stake_after × acc`.
+/// Used by claim_payout, exit_position (before burn) and refund (before zeroing shares).
+fn settle_payout<'info>(
+    c: &Account<'info, Campaign>,
+    p: &mut Account<'info, Position>,
+    stake_before: u64,
+    stake_after: u64,
+    pool: Option<&InterfaceAccount<'info, TokenAccount>>,
+    usdc_mint: &InterfaceAccount<'info, Mint>,
+    to: &InterfaceAccount<'info, TokenAccount>,
+    program: &Interface<'info, TokenInterface>,
+) -> Result<()> {
+    let pending = logic::pending_payout(stake_before, c.acc_payout_per_share, p.payout_debt).map_err(err)?;
+    if pending > 0 {
+        let pool = pool.ok_or(HarvestiaError::InvalidStatus)?;
+        require_keys_eq!(pool.key(), c.payout_pool, HarvestiaError::InvalidStatus);
+        vault_transfer(c, pool, usdc_mint, to, program, pending)?;
+        p.payout_claimed = logic::add(p.payout_claimed, pending).map_err(err)?;
+    }
+    p.payout_debt = logic::payout_debt_for(stake_after, c.acc_payout_per_share).map_err(err)?;
+    Ok(())
 }
 
 // ------------------------------------------------------------------ helpers
@@ -541,6 +803,61 @@ pub struct Campaign {
     pub milestones: [Milestone; 8],
     pub bump: u8,
     pub vault_bump: u8,
+    // ---- Offerings (v2)
+    pub category: u8,      // logic::Category
+    pub offering_kind: u8, // logic::OfferingKind
+    pub equity_terms: EquityTermsState,
+    pub token_terms: TokenTermsState,
+    /// close_raise time; payout periods start `starts_after_days` later.
+    pub activated_at: i64,
+    /// Cumulative payout per investor share, scaled by 1e12.
+    pub acc_payout_per_share: u128,
+    pub payout_pool: Pubkey,
+    pub payout_deposited: u64,
+    pub next_payout_period: u32,
+    pub late_streak: u8,
+    /// Public flags: bit0 PayoutDefault, bit1 TokenOverdue.
+    pub flags: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
+pub struct EquityTermsState {
+    pub equity_bps: u16,
+    pub basis: u8, // logic::PayoutBasis
+    pub share_bps: u16,
+    pub starts_after_days: u16,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default, InitSpace)]
+pub struct TokenTermsState {
+    #[max_len(10)]
+    pub symbol: String,
+    pub total_supply: u64,
+    pub investor_allocation_bps: u16,
+    pub target_launch_date: i64,
+    pub cliff_months: u16,
+    pub months: u16,
+    pub mint: Pubkey,
+    pub vault: Pubkey,
+    pub launched_at: i64,
+    pub deposited: u64,
+    /// outstanding investor shares when the allocation was deposited (pro-rata base).
+    pub snapshot_shares: u64,
+}
+
+/// Public payout ledger row: one per (campaign, period).
+#[account]
+#[derive(InitSpace)]
+pub struct PayoutPeriod {
+    pub campaign: Pubkey,
+    pub period: u32,
+    pub due: i64,
+    pub gross_amount: u64,
+    pub amount: u64,
+    pub paid: bool,
+    pub paid_at: i64,
+    pub status: u8, // logic::PayoutStatus
+    pub bump: u8,
 }
 
 /// PRIVATE BUILD: `deposit`/`shares` are commitments; plaintext reference here.
@@ -555,6 +872,11 @@ pub struct Position {
     pub shares_claimed: bool,
     pub refunded: bool,
     pub bump: u8,
+    // ---- Offerings (v2)
+    /// shares × accPerShare / 1e12 at last settlement.
+    pub payout_debt: u128,
+    pub payout_claimed: u64,
+    pub tokens_claimed: u64,
 }
 
 /// Nullifier: one per (campaign, milestone, round, position).
@@ -581,6 +903,33 @@ pub struct CreateCampaignArgs {
     pub min_investors: u32,
     pub metadata_uri: String,
     pub milestones: Vec<MilestoneArg>,
+    pub category: u8,
+    pub offering: OfferingArg,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct EquityOfferingArg {
+    pub equity_bps: u16,
+    pub basis: u8, // 0 revenue, 1 profit
+    pub share_bps: u16,
+    pub starts_after_days: u16,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct TokenOfferingArg {
+    pub symbol: String,
+    pub total_supply: u64,
+    pub investor_allocation_bps: u16,
+    pub target_launch_date: i64,
+    pub cliff_months: u16,
+    pub months: u16,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct OfferingArg {
+    pub kind: u8, // 0 equity, 1 token, 2 both
+    pub equity: Option<EquityOfferingArg>,
+    pub token: Option<TokenOfferingArg>,
 }
 
 // ------------------------------------------------------------------ contexts
@@ -712,6 +1061,9 @@ pub struct Refund<'info> {
     #[account(mut, token::mint = usdc_mint)]
     pub investor_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
     pub usdc_program: Interface<'info, TokenInterface>,
+    /// Required only when the position has pending equity payouts.
+    #[account(mut)]
+    pub payout_pool: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
 }
 
 #[derive(Accounts)]
@@ -784,6 +1136,9 @@ pub struct ExitPosition<'info> {
     pub investor_shares: Box<InterfaceAccount<'info, TokenAccount>>,
     pub usdc_program: Interface<'info, TokenInterface>,
     pub share_program: Interface<'info, TokenInterface>,
+    /// Required only when the position has pending equity payouts.
+    #[account(mut)]
+    pub payout_pool: Option<Box<InterfaceAccount<'info, TokenAccount>>>,
 }
 
 #[derive(Accounts)]
@@ -805,10 +1160,105 @@ pub struct ClaimFounderShares<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+#[instruction(period: u32)]
+pub struct DepositPayout<'info> {
+    #[account(mut)]
+    pub founder: Signer<'info>,
+    #[account(mut, has_one = founder, has_one = usdc_mint)]
+    pub campaign: Box<Account<'info, Campaign>>,
+    #[account(
+        init_if_needed, payer = founder, space = 8 + PayoutPeriod::INIT_SPACE,
+        seeds = [b"payout", campaign.key().as_ref(), &period.to_le_bytes()], bump
+    )]
+    pub payout_period: Box<Account<'info, PayoutPeriod>>,
+    #[account(
+        init_if_needed, payer = founder, seeds = [b"payout_pool", campaign.key().as_ref()], bump,
+        token::mint = usdc_mint, token::authority = campaign, token::token_program = usdc_program
+    )]
+    pub payout_pool: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, token::mint = usdc_mint, token::authority = founder)]
+    pub founder_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub usdc_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(period: u32)]
+pub struct MarkLate<'info> {
+    #[account(mut)]
+    pub caller: Signer<'info>,
+    #[account(mut)]
+    pub campaign: Box<Account<'info, Campaign>>,
+    #[account(
+        init, payer = caller, space = 8 + PayoutPeriod::INIT_SPACE,
+        seeds = [b"payout", campaign.key().as_ref(), &period.to_le_bytes()], bump
+    )]
+    pub payout_period: Box<Account<'info, PayoutPeriod>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimPayout<'info> {
+    pub investor: Signer<'info>,
+    #[account(has_one = usdc_mint, has_one = payout_pool)]
+    pub campaign: Box<Account<'info, Campaign>>,
+    #[account(mut, seeds = [b"position", campaign.key().as_ref(), investor.key().as_ref()], bump = position.bump)]
+    pub position: Box<Account<'info, Position>>,
+    #[account(mut, seeds = [b"payout_pool", campaign.key().as_ref()], bump)]
+    pub payout_pool: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, token::mint = usdc_mint)]
+    pub investor_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub usdc_program: Interface<'info, TokenInterface>,
+}
+
+#[derive(Accounts)]
+pub struct RegisterToken<'info> {
+    #[account(mut)]
+    pub founder: Signer<'info>,
+    #[account(mut, has_one = founder)]
+    pub campaign: Box<Account<'info, Campaign>>,
+    pub token_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(
+        init, payer = founder, seeds = [b"token_vault", campaign.key().as_ref()], bump,
+        token::mint = token_mint, token::authority = campaign, token::token_program = token_program
+    )]
+    pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, token::mint = token_mint, token::authority = founder)]
+    pub founder_token: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimTokens<'info> {
+    pub investor: Signer<'info>,
+    pub campaign: Box<Account<'info, Campaign>>,
+    #[account(mut, seeds = [b"position", campaign.key().as_ref(), investor.key().as_ref()], bump = position.bump)]
+    pub position: Box<Account<'info, Position>>,
+    #[account(address = campaign.token_terms.mint)]
+    pub token_mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(mut, seeds = [b"token_vault", campaign.key().as_ref()], bump)]
+    pub token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut, token::mint = token_mint)]
+    pub investor_token: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
+
 // ------------------------------------------------------------------ events
 
 #[event] pub struct ConfigInitialized { pub admin: Pubkey, pub reviewer: Pubkey, pub fee_bps: u16 }
-#[event] pub struct CampaignCreated { pub campaign: Pubkey, pub founder: Pubkey, pub goal: u64, pub equity_bps: u16 }
+#[event] pub struct CampaignCreated { pub campaign: Pubkey, pub founder: Pubkey, pub goal: u64, pub equity_bps: u16, pub category: u8, pub offering_kind: u8 }
+#[event] pub struct PayoutDeposited { pub campaign: Pubkey, pub period: u32, pub gross_amount: u64, pub amount: u64, pub status: u8, pub late_streak: u8 }
+#[event] pub struct PayoutMarkedLate { pub campaign: Pubkey, pub period: u32, pub late_streak: u8, pub payout_default: bool }
+#[event] pub struct PayoutDefault { pub campaign_id: u64, pub founder: Pubkey }
+/// No per-investor amount emitted (privacy).
+#[event] pub struct PayoutClaimed { pub campaign: Pubkey }
+#[event] pub struct TokenRegistered { pub campaign: Pubkey, pub mint: Pubkey, pub deposited: u64 }
+#[event] pub struct TokensClaimed { pub campaign: Pubkey }
+#[event] pub struct TokenOverdue { pub campaign: Pubkey }
 #[event] pub struct CampaignApproved { pub campaign: Pubkey }
 /// No per-investor amount is emitted (privacy); only public aggregates.
 #[event] pub struct Invested { pub campaign: Pubkey, pub raised_total: u64, pub investor_count: u32 }
@@ -856,6 +1306,21 @@ pub enum HarvestiaError {
     #[msg("exit window closed")] ExitWindowClosed,
     #[msg("insufficient shares")] InsufficientShares,
     #[msg("spending exceeds released funds")] OverSpend,
+    #[msg("invalid category")] InvalidCategory,
+    #[msg("invalid offering")] InvalidOffering,
+    #[msg("invalid payout terms")] InvalidPayoutTerms,
+    #[msg("invalid token terms")] InvalidTokenTerms,
+    #[msg("campaign has no equity payout offering")] NoPayoutOffering,
+    #[msg("campaign has no token offering")] NoTokenOffering,
+    #[msg("payout below gross x share_bps")] PayoutTooSmall,
+    #[msg("payout period not ended")] PeriodNotEnded,
+    #[msg("payout period not yet due")] PeriodNotDue,
+    #[msg("wrong payout period")] WrongPeriod,
+    #[msg("period already paid")] AlreadyPaid,
+    #[msg("no outstanding shares")] NoShares,
+    #[msg("token already registered")] TokenAlreadyRegistered,
+    #[msg("token not registered")] TokenNotRegistered,
+    #[msg("nothing to claim")] NothingToClaim,
 }
 
 impl From<LogicError> for HarvestiaError {
@@ -890,6 +1355,21 @@ impl From<LogicError> for HarvestiaError {
             L::ExitWindowClosed => H::ExitWindowClosed,
             L::InsufficientShares => H::InsufficientShares,
             L::OverSpend => H::OverSpend,
+            L::InvalidCategory => H::InvalidCategory,
+            L::InvalidOffering => H::InvalidOffering,
+            L::InvalidPayoutTerms => H::InvalidPayoutTerms,
+            L::InvalidTokenTerms => H::InvalidTokenTerms,
+            L::NoPayoutOffering => H::NoPayoutOffering,
+            L::NoTokenOffering => H::NoTokenOffering,
+            L::PayoutTooSmall => H::PayoutTooSmall,
+            L::PeriodNotEnded => H::PeriodNotEnded,
+            L::PeriodNotDue => H::PeriodNotDue,
+            L::WrongPeriod => H::WrongPeriod,
+            L::AlreadyPaid => H::AlreadyPaid,
+            L::NoShares => H::NoShares,
+            L::TokenAlreadyRegistered => H::TokenAlreadyRegistered,
+            L::TokenNotRegistered => H::TokenNotRegistered,
+            L::NothingToClaim => H::NothingToClaim,
         }
     }
 }

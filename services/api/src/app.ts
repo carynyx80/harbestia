@@ -5,13 +5,14 @@ import { z } from "zod";
 import type { Campaign, Milestone } from "@harvestia/sdk/types";
 import * as R from "./rules.js";
 import { Store, seed } from "./store.js";
-import { MockArciumSum, MockArciumTally, MockProofVerifier, type ProofVerifier, type SumProvider, type TallyProvider } from "./privacy.js";
+import { MockArciumClaims, MockArciumSum, MockArciumTally, MockProofVerifier, type ClaimProvider, type ProofVerifier, type SumProvider, type TallyProvider } from "./privacy.js";
 
 export interface AppDeps {
   store?: Store;
   tally?: TallyProvider;
   sum?: SumProvider;
   verifier?: ProofVerifier;
+  claims?: ClaimProvider;
   adminKey?: string;
   now?: () => number;
   seed?: boolean;
@@ -19,6 +20,36 @@ export interface AppDeps {
 
 const hex = z.string().regex(/^[0-9a-fA-F]{16,128}$/);
 const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "must be ISO date");
+const Category = z.enum(["business", "crypto", "consumer", "saas", "hardware", "creator", "other"]);
+const EquityOfferingSchema = z.object({
+  equityBps: z.number().int().min(1).max(10_000),
+  payout: z.object({
+    basis: z.enum(["revenue", "profit"]),
+    shareBps: z.number().int().min(1).max(10_000),
+    frequency: z.literal("monthly").default("monthly"),
+    startsAfterDays: z.number().int().min(0).max(730).default(R.DEFAULT_PAYOUT_STARTS_AFTER_DAYS),
+  }),
+});
+const TokenOfferingSchema = z.object({
+  symbol: z.string().regex(/^[A-Z0-9]{2,10}$/, "symbol must be 2-10 uppercase letters/digits"),
+  totalSupply: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  investorAllocationBps: z.number().int().min(1).max(10_000),
+  targetLaunchDate: isoDate,
+  vesting: z.object({ cliffMonths: z.number().int().min(0).max(120).default(0), months: z.number().int().min(0).max(120).default(12) })
+    .refine((v) => v.cliffMonths <= v.months || v.months === 0, "cliffMonths must be <= months")
+    .default({ cliffMonths: 0, months: 12 }),
+});
+const OfferingSchema = z.object({
+  kind: z.enum(["equity", "token", "both"]),
+  equity: EquityOfferingSchema.optional(),
+  token: TokenOfferingSchema.optional(),
+}).superRefine((o, ctx) => {
+  const needEq = o.kind !== "token", needTok = o.kind !== "equity";
+  if (needEq && !o.equity) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["equity"], message: `offering.equity is required for kind "${o.kind}"` });
+  if (!needEq && o.equity) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["equity"], message: `offering.equity not allowed for kind "token"` });
+  if (needTok && !o.token) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["token"], message: `offering.token is required for kind "${o.kind}"` });
+  if (!needTok && o.token) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["token"], message: `offering.token not allowed for kind "equity"` });
+});
 const CreateCampaign = z.object({
   founder: z.string().min(32).max(64),
   name: z.string().min(1).max(80),
@@ -27,12 +58,31 @@ const CreateCampaign = z.object({
   solution: z.string().min(1).max(2000),
   useOfFunds: z.array(z.string().min(1)).min(1).max(12),
   goalUsdc: z.number().int().positive(),
-  equityBps: z.number().int().min(1).max(10_000),
+  equityBps: z.number().int().min(0).max(10_000).optional(),
+  category: Category.optional(),
+  offering: OfferingSchema.optional(),
   upfrontBps: z.number().int().min(0).max(10_000).default(R.DEFAULT_UPFRONT_BPS),
   raiseDeadline: isoDate,
   minInvestors: z.number().int().min(1).default(R.DEFAULT_MIN_INVESTORS),
   milestones: z.array(z.object({ title: z.string().min(1), description: z.string().min(1), releaseUsdc: z.number().int().positive(), deadline: isoDate })).min(1).max(10),
+}).superRefine((d, ctx) => {
+  if (!d.offering) {
+    if (d.equityBps === undefined || d.equityBps < 1) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["equityBps"], message: "equityBps (>= 1) is required when no offering is given" });
+    return;
+  }
+  const eq = d.offering.equity?.equityBps;
+  if (eq !== undefined && d.equityBps !== undefined && d.equityBps !== eq) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["equityBps"], message: "equityBps must equal offering.equity.equityBps" });
+  if (eq === undefined && d.equityBps) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["equityBps"], message: "token-only offerings sell no equity; omit equityBps or set 0" });
 });
+const DepositPayout = z.object({
+  period: z.number().int().min(1).max(1200),
+  basisAmountUsdc: z.number().min(0).max(1e12),
+  amountUsdc: z.number().min(0).optional(),
+  reportUri: z.string().min(3).max(512).optional(),
+  txSig: z.string().max(128).optional(),
+});
+const Claim = z.object({ positionCommitment: hex, proof: z.string().min(8).max(16384) });
+const RegisterToken = z.object({ mint: z.string().min(32).max(64), depositAmount: z.number().int().positive(), txSig: z.string().max(128).optional() });
 const Invest = z.object({ commitment: hex, ciphertext: z.string().min(8).max(8192), proof: z.string().min(8).max(16384), viewKeyHash: hex.optional(), encryptedNote: z.string().max(8192).optional() });
 const Vote = z.object({ nullifier: hex, encryptedVote: z.string().min(8).max(8192), proof: z.string().min(8).max(16384) });
 const Evidence = z.object({ evidenceUri: z.string().min(3).max(512) });
@@ -70,6 +120,7 @@ export function createApp(deps: AppDeps = {}) {
   const sum = deps.sum ?? new MockArciumSum();
   const tallyProvider = deps.tally ?? new MockArciumTally();
   const verifier = deps.verifier ?? new MockProofVerifier();
+  const claims = deps.claims ?? new MockArciumClaims();
   const adminKey = deps.adminKey ?? resolveSecret(["ADMIN_KEY", "HARVESTIA_ADMIN_KEY"], "harvestia-api");
   const now = deps.now ?? Date.now;
   if (deps.seed !== false) seed(store, now());
@@ -92,7 +143,56 @@ export function createApp(deps: AppDeps = {}) {
   const getC = (id: string) => store.campaigns.get(id);
   const getM = (c: Campaign, idx: string): Milestone | undefined => c.milestones[Number(idx)];
   const isAdmin = (c: any) => safeEqual(c.req.header("x-admin-key"), adminKey);
-  const withRules = (camp: Campaign) => ({ ...camp, lockupEndsAt: new Date(R.lockupEndsAt(Date.parse(camp.raiseDeadline))).toISOString() });
+  const payoutDeposits = (id: string) => new Map((store.payouts.get(id) ?? []).map((d) => [d.period, d.depositedAt] as [number, number]));
+  const payoutStatusOf = (camp: Campaign) => {
+    const eq = camp.offering?.equity;
+    if (!eq) return undefined;
+    const { statuses: _s, ...pub } = R.computePayoutStatus(Date.parse(camp.raiseDeadline), eq.payout.startsAfterDays, payoutDeposits(camp.id), now());
+    return pub;
+  };
+  const tokenStatusOf = (camp: Campaign) => {
+    const tok = camp.offering?.token;
+    if (!tok) return undefined;
+    const launch = store.tokens.get(camp.id);
+    const target = Date.parse(tok.targetLaunchDate);
+    return {
+      ...R.computeTokenStatus(target, launch, now()),
+      launchedAt: launch ? new Date(launch.launchedAt).toISOString() : null,
+      investorAllocation: R.investorTokenAllocation(tok.totalSupply, tok.investorAllocationBps),
+      overdueAt: new Date(target + R.TOKEN_OVERDUE_MS).toISOString(),
+    };
+  };
+  const withRules = (camp: Campaign) => {
+    const payoutStatus = payoutStatusOf(camp), tokenStatus = tokenStatusOf(camp);
+    const flags: NonNullable<Campaign["flags"]> = [];
+    if (payoutStatus?.defaulted) flags.push("PayoutDefault");
+    if (tokenStatus?.overdue) flags.push("TokenOverdue");
+    return {
+      ...camp,
+      lockupEndsAt: new Date(R.lockupEndsAt(Date.parse(camp.raiseDeadline))).toISOString(),
+      ...(payoutStatus ? { payoutStatus } : {}),
+      ...(tokenStatus ? { tokenStatus } : {}),
+      flags,
+    };
+  };
+  const ledgerOf = (camp: Campaign) => {
+    const eq = camp.offering!.equity!;
+    const close = Date.parse(camp.raiseDeadline);
+    const deposits = new Map((store.payouts.get(camp.id) ?? []).map((d) => [d.period, d]));
+    const st = R.computePayoutStatus(close, eq.payout.startsAfterDays, payoutDeposits(camp.id), now());
+    const entries = st.statuses.map((status, i) => {
+      const k = i + 1, b = R.payoutPeriod(close, eq.payout.startsAfterDays, k), d = deposits.get(k);
+      return {
+        period: k, periodStart: new Date(b.start).toISOString(), periodEnd: new Date(b.end).toISOString(), dueDate: new Date(b.due).toISOString(),
+        basis: eq.payout.basis, basisAmountUsdc: d?.basisAmountUsdc ?? null, paidUsdc: d?.paidUsdc ?? 0, status,
+        depositedAt: d ? new Date(d.depositedAt).toISOString() : null, reportUri: d?.reportUri ?? null, txSig: d?.txSig ?? null,
+      };
+    });
+    const { statuses: _s, ...payoutStatus } = st;
+    return { campaignId: camp.id, basis: eq.payout.basis, shareBps: eq.payout.shareBps, entries, payoutStatus };
+  };
+  const totalInvestorShares = (camp: Campaign) => Math.floor(camp.raisedUsdc); // founder-retained shares excluded
+  const positionOf = (id: string, commitment: string) => store.positions.get(id)?.get(commitment);
 
   app.get("/health", (c) => c.json({ ok: true, service: "harvestia-api", privacyMode: PRIVACY_MODE, privacyWarning: MOCK_PRIVACY_BANNER, tally: tallyProvider.name, sum: sum.name, time: new Date(now()).toISOString() }));
 
@@ -113,8 +213,14 @@ export function createApp(deps: AppDeps = {}) {
     const d = p.data;
     const camp: Campaign = {
       id: store.newId(), founder: d.founder, name: d.name, tagline: d.tagline, problem: d.problem, solution: d.solution,
-      useOfFunds: d.useOfFunds, goalUsdc: d.goalUsdc, raisedUsdc: 0, equityBps: d.equityBps, upfrontBps: d.upfrontBps,
+      useOfFunds: d.useOfFunds, goalUsdc: d.goalUsdc, raisedUsdc: 0, equityBps: d.offering?.equity?.equityBps ?? d.equityBps ?? 0, upfrontBps: d.upfrontBps,
       raiseDeadline: new Date(d.raiseDeadline).toISOString(), minInvestors: d.minInvestors, status: "Draft",
+      category: d.category ?? "other",
+      ...(d.offering ? { offering: {
+        kind: d.offering.kind,
+        ...(d.offering.equity ? { equity: d.offering.equity } : {}),
+        ...(d.offering.token ? { token: { ...d.offering.token, targetLaunchDate: new Date(d.offering.token.targetLaunchDate).toISOString() } } : {}),
+      } } : {}),
       milestones: d.milestones.map((x, index) => ({ index, ...x, deadline: new Date(x.deadline).toISOString(), status: "Pending", evidenceUri: null, resubmitUsed: false })),
       spending: [],
     };
@@ -157,6 +263,10 @@ export function createApp(deps: AppDeps = {}) {
     camp.raisedUsdc = total;
     const count = (store.investorCount.get(camp.id) ?? 0) + 1;
     store.investorCount.set(camp.id, count);
+    const posMap = store.positions.get(camp.id) ?? new Map();
+    const shares = BigInt(await claims.sharesOf(ciphertext).catch(() => 0));
+    posMap.set(commitment, { ciphertext, payoutDebt: R.payoutDebtFor(shares, store.payoutAcc.get(camp.id) ?? 0n), tokensClaimed: 0 });
+    store.positions.set(camp.id, posMap);
     const receiptId = store.newId();
     if (viewKeyHash && encryptedNote) {
       const list = store.portfolio.get(viewKeyHash) ?? [];
@@ -253,6 +363,90 @@ export function createApp(deps: AppDeps = {}) {
     const e = { id: store.newId(), date: p.data.date ? new Date(p.data.date).toISOString() : new Date(now()).toISOString(), description: p.data.description, amountUsdc: p.data.amountUsdc, milestoneIndex: p.data.milestoneIndex ?? null, txSig: p.data.txSig ?? null };
     camp.spending.push(e);
     return c.json(e, 201);
+  });
+
+  // ---------------- Offerings (v2): payouts ----------------
+  app.get("/campaigns/:id/payouts", (c) => {
+    const camp = getC(c.req.param("id"));
+    if (!camp) return c.json({ error: "campaign not found" }, 404);
+    if (!camp.offering?.equity) return c.json({ error: "campaign has no equity payout offering" }, 404);
+    return c.json(ledgerOf(camp));
+  });
+
+  app.post("/campaigns/:id/payouts", async (c) => {
+    const camp = getC(c.req.param("id"));
+    if (!camp) return c.json({ error: "campaign not found" }, 404);
+    const eq = camp.offering?.equity;
+    if (!eq) return c.json({ error: "campaign has no equity payout offering" }, 409);
+    if (camp.status !== "Active" && camp.status !== "Completed") return c.json({ error: `campaign is ${camp.status}; payouts start after the raise closes` }, 409);
+    const p = await parse(c, DepositPayout);
+    if (!p.ok) return p.res;
+    const d = p.data, t = now();
+    const close = Date.parse(camp.raiseDeadline);
+    const b = R.payoutPeriod(close, eq.payout.startsAfterDays, d.period);
+    if (t < b.end) return c.json({ error: `period ${d.period} has not ended yet (ends ${new Date(b.end).toISOString()})` }, 409);
+    if ((store.payouts.get(camp.id) ?? []).some((x) => x.period === d.period)) return c.json({ error: `period ${d.period} already paid` }, 409);
+    const amount = R.payoutAmountUsdc(d.basisAmountUsdc, eq.payout.shareBps);
+    if (d.amountUsdc !== undefined && Math.abs(d.amountUsdc - amount) > 0.005) return c.json({ error: `amountUsdc must equal ${eq.payout.basis} x shareBps = ${amount}` }, 400);
+    if (totalInvestorShares(camp) <= 0) return c.json({ error: "no investor shares" }, 409);
+    store.recordPayout(camp.id, { period: d.period, basisAmountUsdc: d.basisAmountUsdc, paidUsdc: amount, depositedAt: t, reportUri: d.reportUri ?? null, txSig: d.txSig ?? null }, totalInvestorShares(camp));
+    const entry = ledgerOf(camp).entries.find((e) => e.period === d.period)!;
+    return c.json(entry, 201);
+  });
+
+  app.post("/campaigns/:id/payouts/claim", async (c) => {
+    const camp = getC(c.req.param("id"));
+    if (!camp) return c.json({ error: "campaign not found" }, 404);
+    if (!camp.offering?.equity) return c.json({ error: "campaign has no equity payout offering" }, 409);
+    const p = await parse(c, Claim);
+    if (!p.ok) return p.res;
+    const pos = positionOf(camp.id, p.data.positionCommitment);
+    if (!pos) return c.json({ error: "position not found" }, 404);
+    if (!(await verifier.verify("payoutClaim", p.data.proof, { campaignId: camp.id, positionCommitment: p.data.positionCommitment }))) return c.json({ error: "invalid proof" }, 400);
+    const shares = BigInt(await claims.sharesOf(pos.ciphertext));
+    const acc = store.payoutAcc.get(camp.id) ?? 0n;
+    const claimable = R.claimablePayout(shares, acc, pos.payoutDebt);
+    pos.payoutDebt = R.payoutDebtFor(shares, acc);
+    const claimId = store.newId();
+    store.claims.set(claimId, { campaignId: camp.id, kind: "payout", positionCommitment: p.data.positionCommitment, at: now() });
+    return c.json({ claimId, positionCommitment: p.data.positionCommitment, encryptedClaim: await claims.sealClaim(R.fromMicro(claimable), "USDC") });
+  });
+
+  // ---------------- Offerings (v2): token ----------------
+  app.post("/campaigns/:id/token", async (c) => {
+    const camp = getC(c.req.param("id"));
+    if (!camp) return c.json({ error: "campaign not found" }, 404);
+    const tok = camp.offering?.token;
+    if (!tok) return c.json({ error: "campaign has no token offering" }, 409);
+    if (camp.status === "Draft" || camp.status === "Raising" || camp.status === "Failed") return c.json({ error: `campaign is ${camp.status}; token registers after the raise closes` }, 409);
+    if (store.tokens.has(camp.id)) return c.json({ error: "token already registered" }, 409);
+    const p = await parse(c, RegisterToken);
+    if (!p.ok) return p.res;
+    const alloc = R.investorTokenAllocation(tok.totalSupply, tok.investorAllocationBps);
+    if (p.data.depositAmount !== alloc) return c.json({ error: `depositAmount must equal investor allocation ${alloc} ${tok.symbol}` }, 400);
+    store.tokens.set(camp.id, { mint: p.data.mint, launchedAt: now(), deposited: alloc, txSig: p.data.txSig ?? null });
+    return c.json(tokenStatusOf(camp), 201);
+  });
+
+  app.post("/campaigns/:id/token/claim", async (c) => {
+    const camp = getC(c.req.param("id"));
+    if (!camp) return c.json({ error: "campaign not found" }, 404);
+    const tok = camp.offering?.token;
+    if (!tok) return c.json({ error: "campaign has no token offering" }, 409);
+    const launch = store.tokens.get(camp.id);
+    if (!launch) return c.json({ error: "token not launched" }, 409);
+    const p = await parse(c, Claim);
+    if (!p.ok) return p.res;
+    const pos = positionOf(camp.id, p.data.positionCommitment);
+    if (!pos) return c.json({ error: "position not found" }, 404);
+    if (!(await verifier.verify("tokenClaim", p.data.proof, { campaignId: camp.id, positionCommitment: p.data.positionCommitment }))) return c.json({ error: "invalid proof" }, 400);
+    const shares = await claims.sharesOf(pos.ciphertext);
+    const frac = R.vestedFraction(launch.launchedAt, now(), tok.vesting);
+    const amount = R.claimableTokens(launch.deposited, shares, totalInvestorShares(camp), frac, pos.tokensClaimed);
+    pos.tokensClaimed += amount;
+    const claimId = store.newId();
+    store.claims.set(claimId, { campaignId: camp.id, kind: "token", positionCommitment: p.data.positionCommitment, at: now() });
+    return c.json({ claimId, positionCommitment: p.data.positionCommitment, encryptedClaim: await claims.sealClaim(amount, tok.symbol) });
   });
 
   app.get("/portfolio/:viewKeyHash", (c) => {
