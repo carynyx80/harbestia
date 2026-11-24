@@ -1,0 +1,9 @@
+{
+  "name": "harvestia-services",
+  "private": true,
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "cd sdk && npm ci && npm run build && cd ../api && npm ci --include=dev && npm run build",
+    "start": "node api/dist/server.js"
+  }
+}
