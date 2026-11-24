@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { Campaign, Milestone } from "@harvestia/sdk/types";
 import * as R from "./rules.js";
 import { Store, seed } from "./store.js";
+import { loadConfig, redact, type PrivacyConfig } from "./config.js";
+import { HeliusVerifier, type ShieldVerifier } from "./helius.js";
 import { MockArciumClaims, MockArciumSum, MockArciumTally, MockProofVerifier, type ClaimProvider, type ProofVerifier, type SumProvider, type TallyProvider } from "./privacy.js";
 
 export interface AppDeps {
@@ -16,9 +18,14 @@ export interface AppDeps {
   adminKey?: string;
   now?: () => number;
   seed?: boolean;
+  /** Privacy config; defaults to loadConfig(process.env) (mock mode unless PRIVACY_MODE=helius). */
+  config?: PrivacyConfig;
+  /** Shield-tx verifier for helius mode; defaults to a HeliusVerifier on the configured RPC. */
+  shieldVerifier?: ShieldVerifier;
 }
 
 const hex = z.string().regex(/^[0-9a-fA-F]{16,128}$/);
+const base58 = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, "must be a base58 Solana address");
 const isoDate = z.string().refine((s) => !Number.isNaN(Date.parse(s)), "must be ISO date");
 const Category = z.enum(["business", "crypto", "consumer", "saas", "hardware", "creator", "other"]);
 const EquityOfferingSchema = z.object({
@@ -64,6 +71,7 @@ const CreateCampaign = z.object({
   upfrontBps: z.number().int().min(0).max(10_000).default(R.DEFAULT_UPFRONT_BPS),
   raiseDeadline: isoDate,
   minInvestors: z.number().int().min(1).default(R.DEFAULT_MIN_INVESTORS),
+  ringAccount: base58.optional(),
   milestones: z.array(z.object({ title: z.string().min(1), description: z.string().min(1), releaseUsdc: z.number().int().positive(), deadline: isoDate })).min(1).max(10),
 }).superRefine((d, ctx) => {
   if (!d.offering) {
@@ -83,6 +91,7 @@ const DepositPayout = z.object({
 });
 const Claim = z.object({ positionCommitment: hex, proof: z.string().min(8).max(16384) });
 const RegisterToken = z.object({ mint: z.string().min(32).max(64), depositAmount: z.number().int().positive(), txSig: z.string().max(128).optional() });
+const HeliusInvest = z.object({ txSignature: z.string().min(64).max(90), commitment: hex, viewKeyHash: hex.optional(), encryptedNote: z.string().max(8192).optional() });
 const Invest = z.object({ commitment: hex, ciphertext: z.string().min(8).max(8192), proof: z.string().min(8).max(16384), viewKeyHash: hex.optional(), encryptedNote: z.string().max(8192).optional() });
 const Vote = z.object({ nullifier: hex, encryptedVote: z.string().min(8).max(8192), proof: z.string().min(8).max(16384) });
 const Evidence = z.object({ evidenceUri: z.string().min(3).max(512) });
@@ -91,6 +100,7 @@ const Spending = z.object({ date: isoDate.optional(), description: z.string().mi
 
 export const PRIVACY_MODE = "mock" as const;
 export const MOCK_PRIVACY_BANNER = "MOCK PRIVACY — amounts and votes are NOT encrypted";
+export const HELIUS_PRIVACY_NOTE = "HELIUS PRIVACY RINGS — deposits verified on-chain; vote tally and sum remain MOCK";
 
 const isProduction = () => process.env.NODE_ENV === "production";
 
@@ -116,6 +126,7 @@ export function safeEqual(a: string | undefined, b: string): boolean {
 }
 
 export function createApp(deps: AppDeps = {}) {
+  const config = deps.config ?? loadConfig(process.env);
   const store = deps.store ?? new Store();
   const sum = deps.sum ?? new MockArciumSum();
   const tallyProvider = deps.tally ?? new MockArciumTally();
@@ -123,6 +134,18 @@ export function createApp(deps: AppDeps = {}) {
   const claims = deps.claims ?? new MockArciumClaims();
   const adminKey = deps.adminKey ?? resolveSecret(["ADMIN_KEY", "HARVESTIA_ADMIN_KEY"], "harvestia-api");
   const now = deps.now ?? Date.now;
+  const helius = config.privacyMode === "helius";
+  const shieldVerifier: ShieldVerifier | undefined = deps.shieldVerifier
+    ?? (helius ? new HeliusVerifier({ rpcUrl: config.rpcUrl!, apiKey: config.heliusApiKey, ringProgramId: config.ringProgramId, now }) : undefined);
+  const publicConfig = { privacyMode: config.privacyMode, cluster: config.cluster, ringProgramId: config.ringProgramId };
+  const awaitingWithdrawal = (camp: Campaign, kind: "payout" | "token" | "refund") => ({
+    status: "awaiting_onchain_withdrawal", kind, campaignId: camp.id, ...publicConfig, ringAccount: camp.ringAccount ?? null,
+    instructions: [
+      "Withdrawals are settled on-chain through Helius Privacy Rings; the API never holds funds or keys.",
+      `In your browser wallet, build and sign an unshield (withdraw) transaction against program ${config.ringProgramId} on ${config.cluster}${camp.ringAccount ? ` for ring account ${camp.ringAccount}` : ""}.`,
+      "Your claimable amount is computed privately; it is not returned by this API.",
+    ],
+  });
   if (deps.seed !== false) seed(store, now());
   for (const c of store.campaigns.values()) sum.seed(c.id, c.raisedUsdc);
 
@@ -194,7 +217,9 @@ export function createApp(deps: AppDeps = {}) {
   const totalInvestorShares = (camp: Campaign) => Math.floor(camp.raisedUsdc); // founder-retained shares excluded
   const positionOf = (id: string, commitment: string) => store.positions.get(id)?.get(commitment);
 
-  app.get("/health", (c) => c.json({ ok: true, service: "harvestia-api", privacyMode: PRIVACY_MODE, privacyWarning: MOCK_PRIVACY_BANNER, tally: tallyProvider.name, sum: sum.name, time: new Date(now()).toISOString() }));
+  app.get("/config", (c) => c.json(publicConfig));
+
+  app.get("/health", (c) => c.json({ ok: true, service: "harvestia-api", privacyMode: config.privacyMode, cluster: config.cluster, privacyWarning: helius ? HELIUS_PRIVACY_NOTE : MOCK_PRIVACY_BANNER, tally: tallyProvider.name, sum: sum.name, time: new Date(now()).toISOString() }));
 
   app.get("/campaigns", (c) => c.json([...store.campaigns.values()].map(withRules)));
 
@@ -216,6 +241,7 @@ export function createApp(deps: AppDeps = {}) {
       useOfFunds: d.useOfFunds, goalUsdc: d.goalUsdc, raisedUsdc: 0, equityBps: d.offering?.equity?.equityBps ?? d.equityBps ?? 0, upfrontBps: d.upfrontBps,
       raiseDeadline: new Date(d.raiseDeadline).toISOString(), minInvestors: d.minInvestors, status: "Draft",
       category: d.category ?? "other",
+      ...(d.ringAccount ? { ringAccount: d.ringAccount } : {}),
       ...(d.offering ? { offering: {
         kind: d.offering.kind,
         ...(d.offering.equity ? { equity: d.offering.equity } : {}),
@@ -246,6 +272,32 @@ export function createApp(deps: AppDeps = {}) {
     if (!camp) return c.json({ error: "campaign not found" }, 404);
     if (camp.status !== "Raising") return c.json({ error: `campaign is ${camp.status}, not Raising` }, 409);
     if (now() > Date.parse(camp.raiseDeadline)) return c.json({ error: "raise deadline passed" }, 409);
+    if (helius) {
+      if (!camp.ringAccount) return c.json({ error: "campaign has no ringAccount configured for Helius Privacy Rings" }, 409);
+      const hp = await parse(c, HeliusInvest);
+      if (!hp.ok) return hp.res;
+      const { txSignature, commitment, viewKeyHash, encryptedNote } = hp.data;
+      const seenH = store.commitments.get(camp.id) ?? new Set<string>();
+      if (seenH.has(commitment)) return c.json({ error: "commitment already used" }, 409);
+      let vr;
+      try {
+        vr = await shieldVerifier!.verify(txSignature, camp.ringAccount);
+      } catch (e) {
+        return c.json({ error: redact(`could not verify transaction: ${(e as Error).message}`, config.heliusApiKey) }, 502);
+      }
+      if (!vr.ok) return c.json({ error: `shield transaction rejected: ${vr.reason}` }, vr.reason === "signature already used" ? 409 : 400);
+      seenH.add(commitment);
+      store.commitments.set(camp.id, seenH);
+      const countH = (store.investorCount.get(camp.id) ?? 0) + 1;
+      store.investorCount.set(camp.id, countH);
+      const receiptIdH = store.newId();
+      if (viewKeyHash && encryptedNote) {
+        const list = store.portfolio.get(viewKeyHash) ?? [];
+        list.push({ campaignId: camp.id, receiptId: receiptIdH, commitment, encryptedNote, createdAt: new Date(now()).toISOString() });
+        store.portfolio.set(viewKeyHash, list);
+      }
+      return c.json({ receiptId: receiptIdH, status: "confirmed", txSignature, slot: vr.slot, investorCount: countH, amountRevealedTotal: camp.raisedUsdc }, 201);
+    }
     const p = await parse(c, Invest);
     if (!p.ok) return p.res;
     const { commitment, ciphertext, proof, viewKeyHash, encryptedNote } = p.data;
@@ -398,6 +450,7 @@ export function createApp(deps: AppDeps = {}) {
     const camp = getC(c.req.param("id"));
     if (!camp) return c.json({ error: "campaign not found" }, 404);
     if (!camp.offering?.equity) return c.json({ error: "campaign has no equity payout offering" }, 409);
+    if (helius) return c.json(awaitingWithdrawal(camp, "payout"), 202);
     const p = await parse(c, Claim);
     if (!p.ok) return p.res;
     const pos = positionOf(camp.id, p.data.positionCommitment);
@@ -435,6 +488,7 @@ export function createApp(deps: AppDeps = {}) {
     if (!tok) return c.json({ error: "campaign has no token offering" }, 409);
     const launch = store.tokens.get(camp.id);
     if (!launch) return c.json({ error: "token not launched" }, 409);
+    if (helius) return c.json(awaitingWithdrawal(camp, "token"), 202);
     const p = await parse(c, Claim);
     if (!p.ok) return p.res;
     const pos = positionOf(camp.id, p.data.positionCommitment);
@@ -449,10 +503,18 @@ export function createApp(deps: AppDeps = {}) {
     return c.json({ claimId, positionCommitment: p.data.positionCommitment, encryptedClaim: await claims.sealClaim(amount, tok.symbol) });
   });
 
+  app.post("/campaigns/:id/refunds/claim", (c) => {
+    const camp = getC(c.req.param("id"));
+    if (!camp) return c.json({ error: "campaign not found" }, 404);
+    if (camp.status !== "Refunding" && camp.status !== "Failed") return c.json({ error: `campaign is ${camp.status}; refunds open only when Refunding or Failed` }, 409);
+    if (helius) return c.json(awaitingWithdrawal(camp, "refund"), 202);
+    return c.json({ error: "refund claims are settled on-chain; not available in mock mode" }, 501);
+  });
+
   app.get("/portfolio/:viewKeyHash", (c) => {
     const vk = c.req.param("viewKeyHash");
     return c.json({ viewKeyHash: vk, entries: store.portfolio.get(vk) ?? [] });
   });
 
-  return { app, store };
+  return { app, store, config: publicConfig };
 }

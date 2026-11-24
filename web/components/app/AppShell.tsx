@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { usePathname } from "next/navigation";
-import { Suspense, useState, type ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
+import WalletButton from "./WalletButton";
 import { Compass, Wallet, Vote, Rocket, ShieldCheck, Search, Bell, Lock } from "lucide-react";
 
 const nav = [
@@ -14,8 +15,6 @@ const nav = [
 ];
 
 export default function AppShell({ children, pill }: { children: ReactNode; pill?: ReactNode }) {
-  const [connected, setConnected] = useState(false);
-
   return (
     <div className="min-h-screen bg-paper text-ink antialiased">
       {/* Sidebar */}
@@ -59,17 +58,7 @@ export default function AppShell({ children, pill }: { children: ReactNode; pill
             <button className="hidden h-9 w-9 place-items-center border-2 border-ink text-ink transition hover:bg-ink hover:text-paper sm:grid">
               <Bell className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => setConnected((c) => !c)}
-              className={
-                connected
-                  ? "inline-flex items-center gap-2 border-2 border-ink bg-paper px-3 py-2 font-mono text-xs font-semibold text-ink"
-                  : "inline-flex items-center gap-2 border-2 border-ink bg-signal px-3 py-2 font-mono text-xs font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-ink hover:text-paper"
-              }
-            >
-              <Wallet className="h-4 w-4" />
-              {connected ? "7xKp…Q2mF" : "Connect wallet"}
-            </button>
+            <WalletButton />
           </div>
         </div>
         {/* mobile nav */}

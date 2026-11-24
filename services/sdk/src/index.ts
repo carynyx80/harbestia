@@ -3,6 +3,7 @@ import type {
   Campaign, CreateCampaignInput, EvidenceInput, FinalizeResult, InvestInput, InvestResult,
   Milestone, Portfolio, SpendEntry, SpendingInput, VoteInput, VoteRound,
   DepositPayoutInput, PayoutEntry, PayoutLedger, ClaimInput, ClaimResult, RegisterTokenInput, TokenStatus,
+  ApiConfig, InvestWithSignatureInput, InvestWithSignatureResult, AwaitingWithdrawal,
 } from "./types.js";
 
 export interface ClientOptions {
@@ -34,7 +35,12 @@ export function createClient(opts: ClientOptions = {}) {
   }
 
   return {
-    health: () => req<{ ok: boolean; service: string }>("GET", "/health"),
+    health: () => req<{ ok: boolean; service: string; privacyMode?: ApiConfig["privacyMode"]; cluster?: ApiConfig["cluster"] }>("GET", "/health"),
+    getConfig: () => req<ApiConfig>("GET", "/config"),
+    /** Helius mode: submit the signature of a shield tx the investor's wallet already signed and sent. */
+    investWithSignature: (id: string, input: InvestWithSignatureInput) => req<InvestWithSignatureResult>("POST", `/campaigns/${encodeURIComponent(id)}/invest`, input),
+    /** Helius mode: payout/token claims return AwaitingWithdrawal (HTTP 202) instead of ClaimResult; check `"status" in res`. */
+    claimRefund: (id: string, input: ClaimInput) => req<AwaitingWithdrawal>("POST", `/campaigns/${encodeURIComponent(id)}/refunds/claim`, input),
     listCampaigns: () => req<Campaign[]>("GET", "/campaigns"),
     getCampaign: (id: string) => req<Campaign & { rounds: VoteRound[] }>("GET", `/campaigns/${encodeURIComponent(id)}`),
     createCampaign: (input: CreateCampaignInput) => req<Campaign>("POST", "/campaigns", input),
@@ -75,6 +81,8 @@ export const listPayouts = defaultClient.listPayouts;
 export const claimPayout = defaultClient.claimPayout;
 export const registerToken = defaultClient.registerToken;
 export const claimTokens = defaultClient.claimTokens;
+export const getConfig = defaultClient.getConfig;
+export const investWithSignature = defaultClient.investWithSignature;
 
 // ---- Mock client-side encryption helpers (stand-ins for Arcium/ZK client libs) ----
 // "mockenc1:" payloads are NOT secure; they let the local mock Arcium cluster decrypt.

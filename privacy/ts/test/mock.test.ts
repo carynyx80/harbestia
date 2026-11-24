@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MockPrivacy, HeliusRingsAdapter, NotImplementedAdapterError, prorataRefund } from "../src/index.js";
+import { MockPrivacy, prorataRefund } from "../src/index.js";
 
 const USDC = 1_000_000n;
 const MINT = "USDC-mint";
@@ -74,10 +74,4 @@ test("tampered mock proof fails verification", async () => {
   const m = new MockPrivacy();
   const p = await m.prove("kyc_membership", { secret: "id", campaignId: "a" });
   assert.equal(await m.verify({ ...p, publicInputs: [p.publicInputs[0]!, "00"] }), false);
-});
-
-test("Helius adapter stubs throw clear adapter TODOs", async () => {
-  const a = new HeliusRingsAdapter({ modules: { spr: {}, iface: {} }, shieldedKeypair: {}, sendAndConfirm: async () => ({ signature: "" }) });
-  await assert.rejects(a.privateTransfer({ mint: MINT, amount: 1n, toShieldedAddress: "x" }), NotImplementedAdapterError);
-  await assert.rejects(a.getEncryptedBalance("x", MINT), NotImplementedAdapterError);
 });

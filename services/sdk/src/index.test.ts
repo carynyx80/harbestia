@@ -46,3 +46,17 @@ test("openMockClaim decodes mockenc1 payloads", () => {
   const enc = "mockenc1:" + Buffer.from(JSON.stringify({ amount: 12.5, unit: "USDC" })).toString("base64");
   assert.deepEqual(openMockClaim(enc), { amount: 12.5, unit: "USDC" });
 });
+
+test("getConfig and investWithSignature hit the right endpoints", async () => {
+  const calls: string[] = [];
+  const fake = (async (url: string, init: any) => {
+    calls.push(`${init.method} ${url} ${init.body ?? ""}`);
+    return new Response(JSON.stringify({ privacyMode: "helius" }), { status: 200 });
+  }) as any;
+  const c = createClient({ baseUrl: "http://x", fetch: fake });
+  assert.equal((await c.getConfig()).privacyMode, "helius");
+  await c.investWithSignature("fb", { txSignature: "s".repeat(88), commitment: "ab".repeat(32) });
+  assert.equal(calls[0], "GET http://x/config ");
+  assert.ok(calls[1].startsWith("POST http://x/campaigns/fb/invest "));
+  assert.ok(calls[1].includes("txSignature"));
+});

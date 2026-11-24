@@ -1,6 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import AppShell from "@/components/app/AppShell";
 import SourcePill from "@/components/app/SourcePill";
+import WalletProvider from "@/components/app/WalletProvider";
 
 function PageSkeleton() {
   return (
@@ -17,8 +18,10 @@ function PageSkeleton() {
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <AppShell pill={<Suspense fallback={null}><SourcePill /></Suspense>}>
-      <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
-    </AppShell>
+    <WalletProvider>
+      <AppShell pill={<Suspense fallback={null}><SourcePill /></Suspense>}>
+        <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+      </AppShell>
+    </WalletProvider>
   );
 }

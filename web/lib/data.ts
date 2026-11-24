@@ -9,6 +9,7 @@ import {
   HarvestiaApiError,
   type Campaign as ApiCampaign,
   type VoteRound,
+  type InvestInput,
 } from "./api";
 import * as mock from "./mock";
 import type { Campaign, Holding, VoteInfo, FounderProfile, PayoutEntry, CampaignCategory, Offering } from "./mock";
@@ -215,6 +216,15 @@ export function errorMessage(e: unknown): string {
 export async function investPrivately(campaignId: string, amountUsdc: number) {
   const sealed = await sealInvestment(amountUsdc);
   return browserApi.investPrivately(campaignId, sealed);
+}
+
+/**
+ * Helius mode: record a confirmed Privacy Rings deposit. Sends { txSignature, commitment }
+ * (plus the sealed ciphertext/proof the current API schema still requires).
+ */
+export async function recordShieldedInvestment(campaignId: string, amountUsdc: number, txSignature: string) {
+  const sealed = await sealInvestment(amountUsdc);
+  return browserApi.investPrivately(campaignId, { ...sealed, txSignature } as InvestInput & { txSignature: string });
 }
 
 /** uiIndex is 1-based. Weight is a hidden stake; mock uses a fixed demo stake. */

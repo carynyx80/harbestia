@@ -53,6 +53,8 @@ export interface Campaign {
   /** Offerings (v2). Optional for backward compatibility with v1 campaigns. */
   category?: CampaignCategory;
   offering?: Offering;
+  /** Helius Privacy Rings ring/deposit account for this campaign (helius mode). */
+  ringAccount?: string;
   /** Computed by the API when offering has an equity block. */
   payoutStatus?: PayoutStatus;
   /** Computed by the API when offering has a token block. */
@@ -219,6 +221,8 @@ export interface CreateCampaignInput {
   raiseDeadline: string;
   minInvestors?: number;
   category?: CampaignCategory;
+  /** Helius Privacy Rings ring/deposit account (base58). Required to accept investments in helius mode. */
+  ringAccount?: string;
   offering?: {
     kind: OfferingKind;
     equity?: { equityBps: number; payout: { basis: PayoutBasis; shareBps: number; frequency?: "monthly"; startsAfterDays?: number } };
@@ -287,4 +291,37 @@ export interface Portfolio {
 export interface ApiError {
   error: string;
   details?: unknown;
+}
+
+// ---- Privacy mode (mock | helius) ----
+export type PrivacyMode = "mock" | "helius";
+export type SolanaCluster = "devnet" | "mainnet";
+export interface ApiConfig { privacyMode: PrivacyMode; cluster: SolanaCluster; ringProgramId: string }
+
+/** Helius mode: the investor's browser wallet signs and sends the shield (deposit) tx, then submits its signature. */
+export interface InvestWithSignatureInput {
+  txSignature: string;
+  /** Hex commitment to the hidden position (no plaintext amount). */
+  commitment: string;
+  viewKeyHash?: string;
+  encryptedNote?: string;
+}
+export interface InvestWithSignatureResult {
+  receiptId: string;
+  status: "confirmed";
+  txSignature: string;
+  slot: number;
+  investorCount: number;
+  amountRevealedTotal: number;
+}
+/** Helius mode: claims/refunds settle via an on-chain unshield signed by the investor's wallet. */
+export interface AwaitingWithdrawal {
+  status: "awaiting_onchain_withdrawal";
+  kind: "payout" | "token" | "refund";
+  campaignId: string;
+  privacyMode: PrivacyMode;
+  cluster: SolanaCluster;
+  ringProgramId: string;
+  ringAccount: string | null;
+  instructions: string[];
 }
