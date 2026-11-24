@@ -1,5 +1,7 @@
 # Harvestia
 
+**Pitch in public. Invest invisible.** Live at [www.harvestia.xyz](https://www.harvestia.xyz) · API at https://api.harvestia.xyz (pending DNS).
+
 **Pitch in public. Invest invisible.** Shark Tank for startups on Solana: founders pitch publicly, investors back them privately, and funds stay locked in a milestone safe until investors vote that the work is done. Missed milestones refund the remaining funds.
 
 > Status: in active development. Privacy integrations (Helius Privacy Rings, Arcium, ZK) are stubbed with mock implementations and the programs are unaudited. Do not use with real funds.
