@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f2efe8;
+  --paper-2: #e8e4da;
+  --ink: #111111;
+  --muted: #4f4b44;
+  --rule: rgba(17, 17, 17, 0.18);
+  --signal: #ff4d00;
+  --signal-ink: #b33500;
+  --navy: #0b1f3a;
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --border: var(--rule);
+  /* legacy aliases */
+  --emerald: var(--signal-ink);
+  --wheat: var(--navy);
+  --danger: #b3261e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-border: var(--border);
+  --color-rule: var(--rule);
+  --color-muted: var(--muted);
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-navy: var(--navy);
+  --color-emerald: var(--signal-ink);
+  --color-wheat: var(--navy);
+  --color-accent: var(--signal);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono-face);
+  --radius-sm: 1px;
+  --radius: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+h1, h2, h3, h4, .display {
+  font-family: var(--font-display), var(--font-body), system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variation-settings: "wdth" 100;
+}
+.w-cond { font-variation-settings: "wdth" 72; }
+.w-wide { font-variation-settings: "wdth" 125; }
+
+.font-mono, .tabular { font-variant-numeric: tabular-nums; }
+::selection { background: var(--signal); color: var(--ink); }
+
+/* Orange highlight block for emphasis (replaces serif italics) */
+.hl {
+  background: var(--signal);
+  color: var(--ink);
+  padding: 0 0.12em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Bordered mono status stamp */
+.stamp {
+  display: inline-flex; align-items: center; gap: .35rem;
+  border: 1.5px solid currentColor;
+  padding: .15rem .45rem;
+  font-family: var(--font-mono-face), ui-monospace, monospace;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* Masked private amounts */
+.redact { background: var(--ink); color: transparent; user-select: none; letter-spacing: 0; }
+
+/* Editorial photo treatment */
+.photo { filter: grayscale(1) contrast(1.1); transition: filter .4s ease; }
+.group:hover .photo, .photo:hover { filter: grayscale(0) sepia(.4) saturate(2.2) hue-rotate(-18deg) contrast(1.05); }
+
+/* Crisp underline hover */
+.ul-hover { background: linear-gradient(currentColor, currentColor) 0 100% / 0 1.5px no-repeat; transition: background-size .25s ease; }
+.ul-hover:hover { background-size: 100% 1.5px; }
+
+/* Visible 12-col grid lines */
+.grid-lines {
+  background-image: repeating-linear-gradient(90deg, var(--rule) 0 1px, transparent 1px calc(100% / 12));
+  opacity: .5;
+}
+
+/* legacy no-ops so stray classes don't break */
+.glass { background: var(--paper); border: 1px solid var(--ink); }
+.text-gradient { color: var(--signal-ink); }
+
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.animate-marquee { animation: marquee 40s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-marquee { animation: none; } }

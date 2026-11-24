@@ -1,0 +1,8 @@
+[package]
+name = "kyc_membership"
+type = "bin"
+authors = ["Harvestia"]
+compiler_version = ">=1.0.0-beta.0"
+
+[dependencies]
+harvestia_lib = { path = "../lib" }

@@ -1,0 +1,8 @@
+[package]
+name = "clean_funds"
+type = "bin"
+authors = ["Harvestia"]
+compiler_version = ">=1.0.0-beta.0"
+
+[dependencies]
+harvestia_lib = { path = "../lib" }

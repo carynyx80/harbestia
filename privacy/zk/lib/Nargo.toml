@@ -1,0 +1,7 @@
+[package]
+name = "harvestia_lib"
+type = "lib"
+authors = ["Harvestia"]
+compiler_version = ">=1.0.0-beta.0"
+
+[dependencies]

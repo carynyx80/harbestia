@@ -1,0 +1,8 @@
+[package]
+name = "harvestia-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure-Rust Harvestia business rules (same source as programs/harvestia/src/logic.rs)"
+
+[lib]
+path = "src/lib.rs"

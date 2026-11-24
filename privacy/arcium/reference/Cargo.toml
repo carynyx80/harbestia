@@ -1,0 +1,8 @@
+[package]
+name = "harvestia-privacy-reference"
+version = "0.1.0"
+edition = "2021"
+description = "Plain-Rust reference for the Harvestia Arcis circuits (vote tally, sum raised, pro-rata refund)"
+publish = false
+
+[dependencies]

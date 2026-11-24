@@ -1,0 +1,10 @@
+# Arcis encrypted instructions. Built by `arcium build` (not available in this
+# environment). Version pin is a placeholder: match the arcis version that
+# `arcium init` generates for your installed CLI.
+[package]
+name = "encrypted-ixs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+arcis = "*" # TODO pin to the version from `arcium init`

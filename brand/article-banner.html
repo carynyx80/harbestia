@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=IBM+Plex+Mono:wght@500;600;700&display=block" rel="stylesheet">
+<style>
+  :root { --paper:#F2EFE8; --ink:#111111; --signal:#FF4D00; --navy:#0B1F3A; --rule:rgba(17,17,17,.18); --muted:#4f4b44; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:1500px; height:600px; overflow:hidden; background:var(--paper); }
+  body { position:relative; color:var(--ink); }
+  .mono { font-family:"IBM Plex Mono",monospace; text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
+  .grid { position:absolute; inset:0; background-image:repeating-linear-gradient(90deg, var(--rule) 0 1px, transparent 1px 125px); opacity:.45; }
+  .top { position:absolute; left:0; right:0; top:0; height:44px; border-bottom:2px solid var(--ink); display:flex; align-items:center; justify-content:space-between; padding:0 48px; font-size:14px; background:var(--paper); }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand b { font-family:"Archivo",sans-serif; font-weight:900; font-variation-settings:"wdth" 125; font-size:18px; letter-spacing:0; }
+  .left { position:absolute; left:48px; top:84px; width:880px; }
+  .kicker { font-size:15px; display:flex; gap:14px; align-items:center; }
+  .kicker .box { background:var(--ink); color:var(--paper); padding:5px 10px; }
+  h1 { font-family:"Archivo",sans-serif; font-weight:900; font-variation-settings:"wdth" 86; text-transform:uppercase; font-size:100px; line-height:.9; letter-spacing:-.025em; margin-top:26px;  white-space:nowrap; }
+  .hl { background:var(--signal); padding:0 .08em; }
+  .dek { margin-top:30px; font-family:"Archivo",sans-serif; font-weight:500; font-variation-settings:"wdth" 100; font-size:27px; line-height:1.3; color:var(--ink); max-width:760px; }
+  .right { position:absolute; right:48px; top:84px; width:500px; bottom:96px; border:2px solid var(--ink); background:var(--paper); display:flex; flex-direction:column; }
+  .rh { display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:2px solid var(--ink); font-size:13px; background:var(--ink); color:var(--paper); }
+  .rh .tag { border:1.5px solid var(--signal); color:var(--signal); padding:2px 8px; }
+  .row { flex:1; display:flex; align-items:center; gap:16px; padding:0 18px; border-bottom:1.5px solid var(--rule); }
+  .row:last-child { border-bottom:0; }
+  .n { font-family:"Archivo",sans-serif; font-weight:900; font-size:30px; width:46px; }
+  .what { flex:1; font-family:"Archivo",sans-serif; font-weight:700; font-variation-settings:"wdth" 92; font-size:22px; text-transform:uppercase; letter-spacing:-.01em; }
+  .what small { display:block; font-family:"IBM Plex Mono",monospace; font-weight:500; font-size:12px; color:var(--muted); letter-spacing:.06em; margin-top:3px; }
+  .st { font-size:12px; padding:4px 9px; border:2px solid var(--ink); }
+  .st.rel { background:var(--ink); color:var(--paper); }
+  .st.vote { background:var(--signal); border-color:var(--signal); }
+  .st.lock { color:var(--muted); border-color:var(--muted); }
+  .bar { position:absolute; left:0; right:0; bottom:0; height:56px; background:var(--ink); color:var(--paper); display:flex; align-items:center; justify-content:space-between; padding:0 48px; font-size:15px; }
+  .bar .o { color:var(--signal); }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+
+  <div class="top mono">
+    <span class="brand">
+      <svg width="24" height="26" viewBox="20 16 80 88"><rect x="26" y="22" width="18" height="34" fill="#111"/><rect x="26" y="64" width="18" height="34" fill="#111"/><rect x="76" y="22" width="18" height="34" fill="#111"/><rect x="76" y="64" width="18" height="34" fill="#111"/><rect x="48" y="52" width="24" height="16" fill="#FF4D00"/></svg>
+      <b>HARVESTIA</b>
+    </span>
+    <span>The explainer · Vol. 01</span>
+  </div>
+
+  <div class="left">
+    <div class="kicker mono"><span class="box">How it works</span><span>Shark Tank for startups · Solana</span></div>
+    <h1>Pitch in public.<br><span class="hl">Invest</span> invisible.</h1>
+    <p class="dek">Founders pitch in the open. Investors back them privately. The money stays locked until the work is done.</p>
+  </div>
+
+  <div class="right">
+    <div class="rh mono"><span>The milestone safe · Freshbox</span><span class="tag">$500K</span></div>
+    <div class="row"><span class="n">00</span><span class="what">Starting money<small>20% when the raise closes</small></span><span class="st rel mono">Released</span></div>
+    <div class="row"><span class="n">01</span><span class="what">App live<small>Private investor vote</small></span><span class="st rel mono">Released</span></div>
+    <div class="row"><span class="n">02</span><span class="what">1,000 customers<small>7 days to vote</small></span><span class="st vote mono">Voting</span></div>
+    <div class="row"><span class="n">03</span><span class="what">$20K monthly revenue<small>Missed it? Refund</small></span><span class="st lock mono">Locked</span></div>
+  </div>
+
+  <div class="bar mono">
+    <span>Founders public <span class="o">●</span> Investors invisible <span class="o">●</span> Funds locked until they deliver</span>
+    <span>harvestia.xyz</span>
+  </div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+[toolchain]
+anchor_version = "0.32.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+harvestia = "7GQB4kUqwvuNNFGYyyKq2W6346oHNMvHudQnHXXkofnV"
+harvestia_hook = "ED26KMhQDKqF3UXH1tSemGwj5rB6n7nKH46jkQY8vQDG"
+
+[programs.localnet]
+harvestia = "7GQB4kUqwvuNNFGYyyKq2W6346oHNMvHudQnHXXkofnV"
+harvestia_hook = "ED26KMhQDKqF3UXH1tSemGwj5rB6n7nKH46jkQY8vQDG"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test -p harvestia-core"

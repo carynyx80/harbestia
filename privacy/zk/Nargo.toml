@@ -1,0 +1,4 @@
+# Noir workspace. Not compiled here (nargo not installed).
+# Build: nargo compile --workspace ; test: nargo test --workspace
+[workspace]
+members = ["lib", "kyc_membership", "vote_nullifier", "refund_claim", "investor_badge", "clean_funds"]
