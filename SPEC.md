@@ -60,3 +60,21 @@ Both blocks present; investors receive equity payouts AND token allocation pro-r
 
 Milestone safe, private voting, refunds, exits and 5% success fee are unchanged for every offering kind.
 New API endpoints: POST /campaigns/:id/payouts (founder deposits + report), GET /campaigns/:id/payouts (public ledger: period, basis amount, paid amount, status ON_TIME|LATE), POST /campaigns/:id/payouts/claim (body { positionCommitment, proof } → returns encrypted claim), POST /campaigns/:id/token (register mint + deposit), POST /campaigns/:id/token/claim.
+
+## Sample campaigns (v3) — replaces ALL previous demo projects
+Remove FreshBox, SunShare Co-op, Lantern Games, Tidepool, Kiln Coffee, SolGrid, MediLink, Terroir, KitchenOS, GreenHaul and any other demo campaign everywhere (API seed, web mock data, landing copy, tickers, links like /app/vote/freshbox).
+Both campaigns below are FICTIONAL samples: every campaign object carries `sample: true` and the UI shows a "SAMPLE" stamp. Founders are fictional; avatars are designed monograms (no photos of real people).
+
+### 1. Zentrove — crypto (id: "zentrove")
+Tagline: "Private stablecoin payroll for remote teams." Category crypto. Founder (public, fictional): Imani Vale, CEO — ex-payments engineer.
+Problem: paying a remote team in stablecoins exposes every salary on a public chain. Solution: payroll that settles USDC on Solana with amounts shielded, plus compliant payslips.
+Offering: kind "token" — symbol ZTRV, totalSupply 1,000,000,000, investorAllocationBps 1500, targetLaunchDate 2027-06-30, vesting { cliffMonths 3, months 12 }.
+Goal $750,000, upfrontBps 2000 ($150,000). Milestones: M1 "Private payroll live on mainnet beta" (month 3, $200,000); M2 "100 teams running payroll" (month 6, $200,000); M3 "ZTRV launch + $1M monthly payroll volume" (month 9, $200,000).
+Status Raising: raisedUsdc 286,000, investorCount 41, raiseDeadline = now + 21 days.
+
+### 2. Ferrolab — tech (id: "ferrolab")
+Tagline: "AI inspection cameras for small factories." Category saas (hardware + software). Founder (public, fictional): Tomas Rieger, CEO — former manufacturing-line engineer.
+Problem: small factories catch defects by eye, losing 3–5% of output to scrap and returns. Solution: a plug-in camera + model that flags defects on the line, sold as a monthly subscription.
+Offering: kind "equity" — equityBps 1200, payout { basis "revenue", shareBps 700, frequency "monthly", startsAfterDays 90 }.
+Goal $500,000, upfrontBps 2000 ($100,000). Milestones: M1 "50 cameras installed at paying factories" (month 3, $150,000) — Released; M2 "$40k monthly recurring revenue" (month 6, $150,000) — Voting now; M3 "3 enterprise contracts signed" (month 9, $100,000) — Pending.
+Status Active: raise closed 130 days ago, fully raised $500,000, investorCount 63. Payout ledger: 1 period paid ON_TIME (revenue $31,400 → $2,198 to investors). Public spending ledger: 4 entries (camera hardware batch, ML engineer contract, factory pilot installs, sales travel).

@@ -50,6 +50,8 @@ export interface Campaign {
   spending: SpendEntry[];
   /** ISO-8601: raise close + 365 days; share transfers blocked before this (API adds it). */
   lockupEndsAt?: string;
+  /** true for fictional sample/demo campaigns seeded by the API (UI shows a "SAMPLE" stamp). Absent on real campaigns. */
+  sample?: boolean;
   /** Offerings (v2). Optional for backward compatibility with v1 campaigns. */
   category?: CampaignCategory;
   offering?: Offering;

@@ -10,7 +10,7 @@ import { Compass, Wallet, Vote, Rocket, ShieldCheck, Search, Bell, Lock } from "
 const nav = [
   { href: "/app", label: "Explore", icon: Compass },
   { href: "/app/portfolio", label: "Portfolio", icon: Wallet },
-  { href: "/app/vote/freshbox", label: "Votes", icon: Vote, badge: "1" },
+  { href: "/app/vote/ferrolab", label: "Votes", icon: Vote, badge: "1" },
   { href: "/app/founder", label: "Founder", icon: Rocket },
 ];
 
@@ -79,7 +79,7 @@ function useIsActive() {
   return (href: string) =>
     href === "/app"
       ? pathname === "/app" || pathname.startsWith("/app/campaign")
-      : pathname.startsWith(href.replace(/\/freshbox$/, ""));
+      : pathname.startsWith(href.replace(/\/ferrolab$/, ""));
 }
 
 function SidebarNav() {

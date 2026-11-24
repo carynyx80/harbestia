@@ -7,15 +7,12 @@ import { Button } from "@/components/ui/button";
 const U = (id: string) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1200&q=80`;
 
 const ticker = [
-  { n: "FRESHBOX", r: "$412,800", p: "82.6%", s: "VOTING", up: true },
-  { n: "ROOTWISE", r: "$405,000", p: "54.0%", s: "RAISING", up: true },
-  { n: "LOOPLINE", r: "$372,000", p: "31.0%", s: "RAISING", up: true },
-  { n: "MESHGRID", r: "$1,000,000", p: "100%", s: "FUNDED", up: true },
-  { n: "TIDEPOOL", r: "$88,400", p: "17.7%", s: "REFUNDED", up: false },
+  { n: "ZENTROVE · ZTRV", r: "$286,000", p: "38.1%", s: "RAISING", up: true },
+  { n: "FERROLAB", r: "$500,000", p: "100%", s: "M2 VOTING", up: true },
 ];
 
 export function Marquee() {
-  const row = [...ticker, ...ticker];
+  const row = [...ticker, ...ticker, ...ticker, ...ticker, ...ticker, ...ticker];
   const infra = ["Solana", "Helius", "Arcium", "ZK Proofs", "TEE", "Token-2022", "USDC"];
   return (
     <section aria-label="Live campaign ticker" className="border-y-2 border-ink bg-ink text-paper">
@@ -26,6 +23,7 @@ export function Marquee() {
             {row.map((t, i) => (
               <span key={i} className="flex items-center gap-3 whitespace-nowrap border-r border-paper/20 px-5 py-2.5 font-mono text-xs uppercase tracking-[0.06em]">
                 <b className="font-semibold">{t.n}</b>
+                <span className="border border-paper/50 px-1 text-[9px] text-paper/70">SAMPLE</span>
                 <span className="tabular">{t.r}</span>
                 <span className={`tabular ${t.up ? "text-signal" : "text-paper/70"}`}>{t.up ? "▲" : "▼"} {t.p}</span>
                 <span className="border border-paper/50 px-1.5 text-[10px]">{t.s}</span>
@@ -160,30 +158,31 @@ export function PrivacyStack() {
 }
 
 const campaigns = [
-  { n: "FreshBox", t: "Farm-to-door produce subscriptions", img: "1542838132-92c53300491e", r: 82, g: "$500k", e: "10%" },
-  { n: "Rootwise", t: "Soil sensors for smallholder farms", img: "1500937386664-56d1dfef3854", r: 54, g: "$750k", e: "12%" },
-  { n: "Loopline", t: "Last-mile cold-chain logistics", img: "1586201375761-83865001e31c", r: 31, g: "$1.2M", e: "8%" },
+  { id: "zentrove", n: "Zentrove", t: "Private stablecoin payroll for remote teams.", img: "/startups/zentrove-cover.png", r: 38, g: "$750k", e: "15% of ZTRV", s: "Raising" },
+  { id: "ferrolab", n: "Ferrolab", t: "AI inspection cameras for small factories.", img: "/startups/ferrolab-cover.png", r: 100, g: "$500k", e: "12% equity + 7% rev.", s: "Active · M2 vote" },
 ];
 
 export function Campaigns() {
   return (
     <section id="founders" className="px-4 py-20 sm:py-28">
       <SectionHead num="06" eyebrow="Featured campaigns" title={<>Founders raising <Serif>right now.</Serif></>} />
-      <div className="mx-auto mt-14 grid max-w-6xl border-2 border-ink md:grid-cols-3">
+      <div className="mx-auto mt-14 grid max-w-6xl border-2 border-ink md:grid-cols-2">
         {campaigns.map((c, k) => (
-          <a key={c.n} href="/app" className={`group block ${k > 0 ? "border-t-2 border-ink md:border-l-2 md:border-t-0" : ""}`}>
+          <a key={c.id} href={`/app/campaign/${c.id}`} className={`group block ${k > 0 ? "border-t-2 border-ink md:border-l-2 md:border-t-0" : ""}`}>
             <figure className="border-b-2 border-ink">
               <div className="relative h-52 overflow-hidden">
-                <img src={U(c.img)} alt={c.n} className="photo h-full w-full object-cover" />
-                <span className="stamp absolute left-3 top-3 bg-paper text-ink">{c.e} equity</span>
+                <img src={c.img} alt={`${c.n} cover art`} className="photo h-full w-full object-cover" />
+                <span className="stamp absolute left-3 top-3 bg-paper text-ink">{c.e}</span>
+                <span className="stamp absolute right-3 top-3 bg-signal text-ink !border-ink">Sample</span>
               </div>
-              <figcaption className="flex justify-between border-t border-ink px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted"><span>Fig. 6.{k + 1}</span><span>Photo: Unsplash</span></figcaption>
+              <figcaption className="flex justify-between border-t border-ink px-4 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.1em] text-muted"><span>Fig. 6.{k + 1}</span><span>{c.s}</span></figcaption>
             </figure>
             <div className="p-5">
               <div className="flex items-center justify-between"><h3 className="w-cond ul-hover text-3xl font-black uppercase">{c.n}</h3><ArrowUpRight size={20} className="transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /></div>
               <p className="mt-1 text-sm text-muted">{c.t}</p>
               <div className="mt-5 h-3 border border-ink"><div className="h-full bg-signal" style={{ width: `${c.r}%` }} /></div>
               <div className="mt-2 flex justify-between font-mono text-xs uppercase tracking-[0.06em]"><span className="font-semibold tabular">{c.r}% funded</span><span className="text-muted">Goal {c.g}</span></div>
+              <p className="mt-4 border-t border-rule pt-3 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">Sample campaign for demonstration — not a live raise.</p>
             </div>
           </a>
         ))}

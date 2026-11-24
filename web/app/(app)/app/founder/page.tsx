@@ -8,7 +8,7 @@ import FounderPayouts from "@/components/app/FounderPayouts";
 async function FounderContent() {
   await connection();
   const all = await getCampaigns();
-  const c = all.find((x) => x.id === "freshbox") ?? all[0];
+  const c = all.find((x) => x.id === "ferrolab") ?? all[0];
   const tokenCampaign = all.find((x) => x.offering.kind !== "equity" && !x.offering.token?.mint);
   const ledger = c ? await getPayouts(c.id) : [];
   const nextPeriod = ledger.length + 1;
@@ -19,7 +19,7 @@ async function FounderContent() {
         title="Founder dashboard"
         subtitle="Any startup — business, brand, SaaS or crypto. Launch a milestone raise, choose what investors get, prove progress, and pay back in public."
       />
-      <FounderClient campaignId={c?.id ?? "freshbox"} campaignName={c?.name ?? "FreshBox"} milestones={milestones} />
+      <FounderClient campaignId={c?.id ?? "ferrolab"} campaignName={c?.name ?? "Ferrolab"} milestones={milestones} />
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         {c && <FounderPayouts campaignId={c.id} campaignName={c.name} offering={c.offering} only="equity" nextPeriod={nextPeriod} />}
         {tokenCampaign && (

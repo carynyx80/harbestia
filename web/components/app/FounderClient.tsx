@@ -134,7 +134,7 @@ export default function FounderClient({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label>Company name</Label>
-              <input className={inputCls} placeholder="e.g. FreshBox" value={name} onChange={(e) => setName(e.target.value)} />
+              <input className={inputCls} placeholder="e.g. Ferrolab" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div>
               <Label>Funding goal (USDC)</Label>

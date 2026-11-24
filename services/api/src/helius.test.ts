@@ -8,7 +8,7 @@ import { DAY_MS } from "./rules.js";
 
 const fixture = () => JSON.parse(readFileSync(new URL("./fixtures/shield-tx.json", import.meta.url), "utf8"));
 const SIG: string = fixture().transaction.signatures[0];
-const RING = "HvstRingFreshbox111111111111111111111111111";
+const RING = "HvstRingFerroLab111111111111111111111111111";
 const PROG = RING_PROGRAM_IDS.devnet;
 const NOW = 1795000000;
 const exp = (o = {}) => ({ signature: SIG, ringProgramId: PROG, ringAccount: RING, nowSec: NOW + 30, maxAgeSec: 900, ...o });
@@ -78,8 +78,8 @@ test("helius mode endpoints: /config, invest with signature, claims await withdr
   assert.equal((await r.json()).status, "confirmed");
   assert.equal((await app.request(`/campaigns/${created.id}/invest`, j({ txSignature: SIG, commitment: "cd".repeat(32) }))).status, 409); // replay
   // campaign without ringAccount refuses
-  assert.equal((await app.request("/campaigns/freshbox/invest", j({ txSignature: SIG, commitment: "ef".repeat(32) }))).status, 409);
-  const claim = await app.request("/campaigns/freshbox/payouts/claim", j({ positionCommitment: "ab".repeat(32), proof: "whatever1" }));
+  assert.equal((await app.request("/campaigns/ferrolab/invest", j({ txSignature: SIG, commitment: "ef".repeat(32) }))).status, 409);
+  const claim = await app.request("/campaigns/ferrolab/payouts/claim", j({ positionCommitment: "ab".repeat(32), proof: "whatever1" }));
   assert.equal(claim.status, 202);
   assert.equal((await claim.json()).status, "awaiting_onchain_withdrawal");
 });

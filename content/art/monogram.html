@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@500;700&display=block" rel="stylesheet">
+<!-- Usage: monogram.html?t=IV&bg=navy|ink|sig|paper&tag=ZTRV -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:256px;height:256px;overflow:hidden}
+body{position:relative;font-family:"Archivo",Helvetica,sans-serif}
+.g{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.09) 1px,transparent 1px);background-size:32px 32px}
+.t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:900;font-stretch:115%;font-size:120px;letter-spacing:-.04em}
+.bar{position:absolute;left:0;right:0;bottom:0;height:14px;background:#FF4D00}
+.tag{position:absolute;left:14px;top:12px;font:700 13px "IBM Plex Mono",monospace;letter-spacing:.1em}
+</style></head><body><div class="g"></div><div class="tag" id="tag"></div><div class="t" id="t"></div><div class="bar" id="bar"></div>
+<script>
+const q=new URLSearchParams(location.search);const P={navy:["#0B1F3A","#F2EFE8"],ink:["#111111","#F2EFE8"],sig:["#FF4D00","#111111"],paper:["#F2EFE8","#111111"]};
+const [bg,fg]=P[q.get("bg")||"navy"];document.body.style.background=bg;document.body.style.color=fg;
+document.getElementById("t").textContent=q.get("t")||"??";document.getElementById("tag").textContent=q.get("tag")||"";
+if(q.get("bg")==="sig")document.getElementById("bar").style.background="#111";
+if(q.get("bg")==="paper")document.querySelector(".g").style.backgroundImage="linear-gradient(rgba(0,0,0,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.08) 1px,transparent 1px)";
+</script></body></html>

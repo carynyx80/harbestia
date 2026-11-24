@@ -8,13 +8,20 @@ const ADMIN = "test-admin-key";
 const createApp = (d: AppDeps = {}) => createAppRaw({ adminKey: ADMIN, ...d });
 const j = (body: unknown, admin = false) => ({ method: "POST", headers: { "content-type": "application/json", ...(admin ? { "x-admin-key": ADMIN } : {}) }, body: JSON.stringify(body) });
 
-test("seed has 5 campaigns incl. FreshBox", async () => {
+test("seed has exactly the 2 fictional sample campaigns", async () => {
   const { app } = createApp();
   const list = await (await app.request("/campaigns")).json();
-  assert.equal(list.length, 5);
-  const fb = list.find((c: any) => c.id === "freshbox");
-  assert.equal(fb.goalUsdc, 500_000);
-  assert.deepEqual(fb.milestones.map((m: any) => m.releaseUsdc), [150_000, 150_000, 100_000]);
+  assert.equal(list.length, 2);
+  assert.deepEqual(list.map((c: any) => c.id).sort(), ["ferrolab", "zentrove"]);
+  assert.ok(list.every((c: any) => c.sample === true));
+  const fl = list.find((c: any) => c.id === "ferrolab");
+  assert.equal(fl.goalUsdc, 500_000);
+  assert.deepEqual(fl.milestones.map((m: any) => m.releaseUsdc), [150_000, 150_000, 100_000]);
+  assert.deepEqual(fl.milestones.map((m: any) => m.status), ["Released", "Voting", "Pending"]);
+  assert.equal(fl.spending.length, 4);
+  const zt = list.find((c: any) => c.id === "zentrove");
+  assert.equal(zt.status, "Raising");
+  assert.deepEqual(zt.milestones.map((m: any) => m.releaseUsdc), [200_000, 200_000, 200_000]);
 });
 
 test("create -> approve -> private invest updates only public total", async () => {
@@ -33,15 +40,15 @@ test("create -> approve -> private invest updates only public total", async () =
   assert.equal("amountUsdc" in pf.entries[0], false);
 });
 
-test("vote: reused nullifier rejected; finalize approves FreshBox M3", async () => {
+test("vote: reused nullifier rejected; finalize approves Ferrolab M2", async () => {
   const { app } = createApp();
-  const v1 = await sealVote("yes", 50_000, "alice", "freshbox:0");
-  const v2 = await sealVote("yes", 50_000, "bob", "freshbox:0");
-  assert.equal((await app.request("/campaigns/freshbox/milestones/0/vote", j(v1))).status, 200);
-  assert.equal((await app.request("/campaigns/freshbox/milestones/0/vote", j(v1))).status, 409);
-  assert.equal((await app.request("/campaigns/freshbox/milestones/0/vote", j(v2))).status, 200);
-  assert.equal((await app.request("/campaigns/freshbox/milestones/0/finalize", j({}))).status, 409); // window open
-  const fin = await (await app.request("/campaigns/freshbox/milestones/0/finalize", j({ force: true }, true))).json();
+  const v1 = await sealVote("yes", 50_000, "alice", "ferrolab:1");
+  const v2 = await sealVote("yes", 50_000, "bob", "ferrolab:1");
+  assert.equal((await app.request("/campaigns/ferrolab/milestones/1/vote", j(v1))).status, 200);
+  assert.equal((await app.request("/campaigns/ferrolab/milestones/1/vote", j(v1))).status, 409);
+  assert.equal((await app.request("/campaigns/ferrolab/milestones/1/vote", j(v2))).status, 200);
+  assert.equal((await app.request("/campaigns/ferrolab/milestones/1/finalize", j({}))).status, 409); // window open
+  const fin = await (await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ force: true }, true))).json();
   assert.equal(fin.tally.outcome, "Approved");
   assert.equal(fin.milestone.status, "Released");
   assert.ok(fin.round.exitWindowClosesAt);
@@ -49,29 +56,29 @@ test("vote: reused nullifier rejected; finalize approves FreshBox M3", async () 
 
 test("quorum failure reopens vote, second failure goes to reviewer", async () => {
   const { app } = createApp();
-  const f1 = await (await app.request("/campaigns/freshbox/milestones/0/finalize", j({ force: true }, true))).json();
+  const f1 = await (await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ force: true }, true))).json();
   assert.equal(f1.tally.outcome, "QuorumFailed");
   assert.equal(f1.milestone.status, "Voting");
   assert.equal(f1.round.quorumFailures, 1);
   assert.equal(f1.round.appealToReviewer, false);
-  const f2 = await (await app.request("/campaigns/freshbox/milestones/0/finalize", j({ force: true }, true))).json();
+  const f2 = await (await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ force: true }, true))).json();
   assert.equal(f2.round.appealToReviewer, true);
-  const f3 = await (await app.request("/campaigns/freshbox/milestones/0/finalize", j({ reviewerApprove: false }, true))).json();
+  const f3 = await (await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ reviewerApprove: false }, true))).json();
   assert.equal(f3.milestone.status, "Resubmitted");
 });
 
 test("validation errors return 400", async () => {
   const { app } = createApp();
-  const r = await app.request("/campaigns/freshbox/milestones/0/vote", j({ nullifier: "zz" }));
+  const r = await app.request("/campaigns/ferrolab/milestones/1/vote", j({ nullifier: "zz" }));
   assert.equal(r.status, 400);
 });
 
 test("first quorum failure extends the same window by exactly 3 days", async () => {
   const { app, store } = createApp();
-  const before = Date.parse(store.rounds.get("freshbox:0")!.closesAt);
-  const v = await sealVote("yes", 1_000, "carol", "freshbox:0");
-  assert.equal((await app.request("/campaigns/freshbox/milestones/0/vote", j(v))).status, 200);
-  const f1 = await (await app.request("/campaigns/freshbox/milestones/0/finalize", j({ force: true }, true))).json();
+  const before = Date.parse(store.rounds.get("ferrolab:1")!.closesAt);
+  const v = await sealVote("yes", 1_000, "carol", "ferrolab:1");
+  assert.equal((await app.request("/campaigns/ferrolab/milestones/1/vote", j(v))).status, 200);
+  const f1 = await (await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ force: true }, true))).json();
   assert.equal(f1.tally.outcome, "QuorumFailed");
   assert.equal(Date.parse(f1.round.closesAt), before + 3 * DAY_MS);
   assert.equal(f1.round.ballots, 1); // ballots kept: it is an extension, not a new vote
@@ -79,18 +86,18 @@ test("first quorum failure extends the same window by exactly 3 days", async () 
 
 test("force-finalize requires admin key and is disabled in production", async () => {
   const { app } = createApp();
-  assert.equal((await app.request("/campaigns/freshbox/milestones/0/finalize", j({ force: true }))).status, 401);
+  assert.equal((await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ force: true }))).status, 401);
   const prev = process.env.NODE_ENV;
   process.env.NODE_ENV = "production";
   try {
-    assert.equal((await app.request("/campaigns/freshbox/milestones/0/finalize", j({ force: true }, true))).status, 403);
+    assert.equal((await app.request("/campaigns/ferrolab/milestones/1/finalize", j({ force: true }, true))).status, 403);
   } finally { process.env.NODE_ENV = prev; }
 });
 
 test("admin key: wrong key rejected; production refuses to start without ADMIN_KEY", async () => {
   const { app } = createApp();
   const bad = { method: "POST", headers: { "content-type": "application/json", "x-admin-key": "dev-admin" }, body: "{}" };
-  assert.equal((await app.request("/campaigns/lantern-games/approve", bad)).status, 401);
+  assert.equal((await app.request("/campaigns/zentrove/approve", bad)).status, 401);
   const saved = { NODE_ENV: process.env.NODE_ENV, ADMIN_KEY: process.env.ADMIN_KEY, HARVESTIA_ADMIN_KEY: process.env.HARVESTIA_ADMIN_KEY };
   process.env.NODE_ENV = "production"; delete process.env.ADMIN_KEY; delete process.env.HARVESTIA_ADMIN_KEY;
   try {
@@ -106,11 +113,11 @@ test("health reports mock privacy; campaigns carry lockupEndsAt and fee fields",
   const { app } = createApp();
   const h = await (await app.request("/health")).json();
   assert.equal(h.privacyMode, "mock");
-  const fb = await (await app.request("/campaigns/freshbox")).json();
+  const fb = await (await app.request("/campaigns/ferrolab")).json();
   assert.equal(Date.parse(fb.lockupEndsAt), Date.parse(fb.raiseDeadline) + 365 * DAY_MS);
   assert.equal(fb.successFeeUsdc, 25_000);
   assert.equal(fb.founderUpfrontUsdc, 75_000);
-  assert.equal(fb.lockedUsdc, 500_000 - 100_000); // fee never reduces locked funds
+  assert.equal(fb.lockedUsdc, 500_000 - 100_000 - 150_000); // upfront + released M1; fee never reduces locked funds
   const list = await (await app.request("/campaigns")).json();
   assert.ok(list.every((c: any) => typeof c.lockupEndsAt === "string"));
 });
@@ -124,23 +131,24 @@ test("seed shows offering variety with computed status fields", async () => {
   const { app } = createApp();
   const list = await (await app.request("/campaigns")).json();
   const by = Object.fromEntries(list.map((c: any) => [c.id, c]));
-  assert.equal(by.freshbox.offering.kind, "equity");
-  assert.equal(by.freshbox.payoutStatus.lastPaidPeriod, 3);
-  assert.equal(by.freshbox.payoutStatus.consecutiveLate, 0);
-  assert.equal(by.freshbox.payoutStatus.defaulted, false);
-  assert.equal(by["sunshare-coop"].offering.kind, "both");
-  assert.equal(by["sunshare-coop"].offering.token.symbol, "SUN");
-  assert.ok(by["sunshare-coop"].payoutStatus && by["sunshare-coop"].tokenStatus);
-  assert.equal(by["lantern-games"].offering.token.symbol, "LNTRN");
-  assert.equal(by["lantern-games"].offering.token.vesting.months, 12);
-  assert.equal(by.tidepool.category, "crypto");
-  assert.equal(by.tidepool.tokenStatus.launched, false);
-  assert.equal("payoutStatus" in by.tidepool, false);
-  assert.equal(by["kiln-coffee"].offering.equity.payout.basis, "profit");
-  assert.equal(by["kiln-coffee"].offering.equity.payout.shareBps, 1200);
-  const ledger = await (await app.request("/campaigns/freshbox/payouts")).json();
-  assert.deepEqual(ledger.entries.map((e: any) => [e.period, e.status, e.paidUsdc]), [[1, "ON_TIME", 720], [2, "ON_TIME", 1000], [3, "ON_TIME", 1280]]);
-  assert.equal((await app.request("/campaigns/tidepool/payouts")).status, 404);
+  assert.equal(by.ferrolab.offering.kind, "equity");
+  assert.equal(by.ferrolab.offering.equity.equityBps, 1200);
+  assert.equal(by.ferrolab.offering.equity.payout.basis, "revenue");
+  assert.equal(by.ferrolab.offering.equity.payout.shareBps, 700);
+  assert.equal(by.ferrolab.category, "saas");
+  assert.equal(by.ferrolab.payoutStatus.lastPaidPeriod, 1);
+  assert.equal(by.ferrolab.payoutStatus.consecutiveLate, 0);
+  assert.equal(by.ferrolab.payoutStatus.defaulted, false);
+  assert.equal("tokenStatus" in by.ferrolab, false);
+  assert.equal(by.zentrove.category, "crypto");
+  assert.equal(by.zentrove.offering.kind, "token");
+  assert.equal(by.zentrove.offering.token.symbol, "ZTRV");
+  assert.deepEqual(by.zentrove.offering.token.vesting, { cliffMonths: 3, months: 12 });
+  assert.equal(by.zentrove.tokenStatus.launched, false);
+  assert.equal("payoutStatus" in by.zentrove, false);
+  const ledger = await (await app.request("/campaigns/ferrolab/payouts")).json();
+  assert.deepEqual(ledger.entries.map((e: any) => [e.period, e.status, e.basisAmountUsdc, e.paidUsdc]), [[1, "ON_TIME", 31_400, 2198]]);
+  assert.equal((await app.request("/campaigns/zentrove/payouts")).status, 404);
 });
 
 test("POST /campaigns validates offering kinds", async () => {
@@ -168,41 +176,41 @@ test("POST /campaigns validates offering kinds", async () => {
 test("payout deposit -> ledger -> private pro-rata claim (no double claim)", async () => {
   let t = Date.now();
   const { app, store } = createApp({ now: () => t });
-  const fb = store.campaigns.get("freshbox")!;
-  // Give FreshBox two known positions summing to the public total via the mock cluster.
+  const fb = store.campaigns.get("ferrolab")!;
+  // Give Ferrolab two known positions summing to the public total via the mock cluster.
   const a = await sealInvestment(100_000), b = await sealInvestment(400_000);
-  store.positions.set("freshbox", new Map([[a.commitment, { ciphertext: a.ciphertext, payoutDebt: 0n, tokensClaimed: 0 }], [b.commitment, { ciphertext: b.ciphertext, payoutDebt: 0n, tokensClaimed: 0 }]]));
-  store.payoutAcc.set("freshbox", 0n);
+  store.positions.set("ferrolab", new Map([[a.commitment, { ciphertext: a.ciphertext, payoutDebt: 0n, tokensClaimed: 0 }], [b.commitment, { ciphertext: b.ciphertext, payoutDebt: 0n, tokensClaimed: 0 }]]));
+  store.payoutAcc.set("ferrolab", 0n);
   assert.equal(fb.raisedUsdc, 500_000);
-  // Period 4 not ended yet
-  assert.equal((await app.request("/campaigns/freshbox/payouts", j({ period: 4, basisAmountUsdc: 20_000 }))).status, 409);
-  assert.equal((await app.request("/campaigns/freshbox/payouts", j({ period: 3, basisAmountUsdc: 1 }))).status, 409); // already paid
-  t += 12 * DAY_MS; // P4 ended 2 days ago, still within grace
-  assert.equal((await app.request("/campaigns/freshbox/payouts", j({ period: 4, basisAmountUsdc: 20_000, amountUsdc: 999 }))).status, 400);
-  const e = await (await app.request("/campaigns/freshbox/payouts", j({ period: 4, basisAmountUsdc: 20_000, reportUri: "ipfs://r4" }))).json();
-  assert.equal(e.paidUsdc, 1600);
+  // Period 2 not ended yet
+  assert.equal((await app.request("/campaigns/ferrolab/payouts", j({ period: 2, basisAmountUsdc: 20_000 }))).status, 409);
+  assert.equal((await app.request("/campaigns/ferrolab/payouts", j({ period: 1, basisAmountUsdc: 1 }))).status, 409); // already paid
+  t += 22 * DAY_MS; // P2 ended 2 days ago, still within grace
+  assert.equal((await app.request("/campaigns/ferrolab/payouts", j({ period: 2, basisAmountUsdc: 20_000, amountUsdc: 999 }))).status, 400);
+  const e = await (await app.request("/campaigns/ferrolab/payouts", j({ period: 2, basisAmountUsdc: 20_000, reportUri: "ipfs://r2" }))).json();
+  assert.equal(e.paidUsdc, 1400); // 7% of 20,000
   assert.equal(e.status, "ON_TIME");
-  const ca = await (await app.request("/campaigns/freshbox/payouts/claim", j(sealClaim(a.commitment)))).json();
+  const ca = await (await app.request("/campaigns/ferrolab/payouts/claim", j(sealClaim(a.commitment)))).json();
   assert.equal("amount" in ca, false);
-  assert.deepEqual(openMockClaim(ca.encryptedClaim), { amount: 320, unit: "USDC" }); // 20% of 1600
-  const again = await (await app.request("/campaigns/freshbox/payouts/claim", j(sealClaim(a.commitment)))).json();
+  assert.deepEqual(openMockClaim(ca.encryptedClaim), { amount: 280, unit: "USDC" }); // 20% of 1400
+  const again = await (await app.request("/campaigns/ferrolab/payouts/claim", j(sealClaim(a.commitment)))).json();
   assert.equal(openMockClaim(again.encryptedClaim).amount, 0);
-  const cb = await (await app.request("/campaigns/freshbox/payouts/claim", j(sealClaim(b.commitment)))).json();
-  assert.equal(openMockClaim(cb.encryptedClaim).amount, 1280);
-  assert.equal((await app.request("/campaigns/freshbox/payouts/claim", j({ positionCommitment: "cd".repeat(32), proof: "mockproof:abcdef12" }))).status, 404);
-  assert.equal((await app.request("/campaigns/freshbox/payouts/claim", j({ positionCommitment: a.commitment, proof: "nope-nope-nope" }))).status, 400);
+  const cb = await (await app.request("/campaigns/ferrolab/payouts/claim", j(sealClaim(b.commitment)))).json();
+  assert.equal(openMockClaim(cb.encryptedClaim).amount, 1120);
+  assert.equal((await app.request("/campaigns/ferrolab/payouts/claim", j({ positionCommitment: "cd".repeat(32), proof: "mockproof:abcdef12" }))).status, 404);
+  assert.equal((await app.request("/campaigns/ferrolab/payouts/claim", j({ positionCommitment: a.commitment, proof: "nope-nope-nope" }))).status, 400);
 });
 
 test("3 missed payouts -> LATE x3 -> payoutDefault flag", async () => {
   let t = Date.now();
   const { app } = createApp({ now: () => t });
-  t += (10 + 30 * 2 + 16) * DAY_MS; // P4,P5,P6 ended and past due, unpaid
-  const fb = await (await app.request("/campaigns/freshbox")).json();
+  t += (20 + 30 * 2 + 16) * DAY_MS; // P2,P3,P4 ended and past due, unpaid
+  const fb = await (await app.request("/campaigns/ferrolab")).json();
   assert.equal(fb.payoutStatus.consecutiveLate, 3);
   assert.equal(fb.payoutStatus.defaulted, true);
   assert.ok(fb.flags.includes("PayoutDefault"));
-  const ledger = await (await app.request("/campaigns/freshbox/payouts")).json();
-  assert.deepEqual(ledger.entries.slice(3).map((x: any) => x.status), ["LATE", "LATE", "LATE"]);
+  const ledger = await (await app.request("/campaigns/ferrolab/payouts")).json();
+  assert.deepEqual(ledger.entries.slice(1).map((x: any) => x.status), ["LATE", "LATE", "LATE"]);
 });
 
 test("token register + vested claim; overdue flag", async () => {
@@ -231,8 +239,9 @@ test("token register + vested claim; overdue flag", async () => {
   assert.deepEqual(c1, { amount: 12_500, unit: "ABC" });
   t += 365 * DAY_MS;
   assert.equal(openMockClaim((await (await app.request(`/campaigns/${id}/token/claim`, j(sealClaim(inv.commitment)))).json()).encryptedClaim).amount, 12_500);
-  // Overdue: Tidepool target +6 months, not launched; jump past target + 180d
-  const tp = await (await app.request("/campaigns/tidepool")).json();
+  // Overdue: Zentrove targets 2027-06-30, not launched; check past target + 180d
+  t = Date.parse("2027-06-30T00:00:00.000Z") + 181 * DAY_MS;
+  const tp = await (await app.request("/campaigns/zentrove")).json();
   assert.equal(tp.tokenStatus.overdue, true);
   assert.ok(tp.flags.includes("TokenOverdue"));
 });

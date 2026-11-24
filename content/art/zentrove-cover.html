@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:wght@400;500;700&display=block" rel="stylesheet">
+<link rel="stylesheet" href="base.css">
+<style>
+.ledger{position:absolute;left:120px;top:150px;width:860px;background:#fff;border:2px solid var(--ink)}
+.lh,.row{display:grid;grid-template-columns:70px 300px 200px 1fr;align-items:center;height:58px;border-bottom:1px solid var(--rule);padding:0 22px}
+.lh{background:var(--ink);color:var(--paper);height:50px}
+.row .m{font-size:16px}
+.bar{height:22px;background:var(--ink)}
+.bar.o{background:var(--sig)}
+.ok{color:#0a7a3d}
+.tok{position:absolute;right:140px;top:170px;width:360px;height:360px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--paper);box-shadow:16px 16px 0 var(--sig)}
+.tok .d{font-size:80px;margin:6px 0}
+.tok .ring{position:absolute;inset:22px;border:2px dashed rgba(242,239,232,.5);border-radius:50%}
+.title{position:absolute;left:120px;bottom:90px;font-size:150px}
+.title span{color:var(--sig)}
+.cap{position:absolute;right:140px;bottom:110px;text-align:right;line-height:1.7}
+.top{position:absolute;left:80px;top:62px;right:80px;display:flex;justify-content:space-between}
+</style></head><body>
+<div class="grid"></div><div class="frame"></div>
+<div class="top m"><span>Harvestia · Sample campaign · Fictional</span><span>Payroll run #0412 · USDC · Solana</span></div>
+<div class="ledger">
+  <div class="lh m"><span>#</span><span>Recipient</span><span>Status</span><span>Amount</span></div>
+  <div class="row m"><span>01</span><span>7xQm…k2Fd</span><span class="ok">Settled</span><div class="bar" style="width:78%"></div></div>
+  <div class="row m"><span>02</span><span>3hTr…Lm2x</span><span class="ok">Settled</span><div class="bar" style="width:54%"></div></div>
+  <div class="row m"><span>03</span><span>9pWe…Qz81</span><span class="ok">Settled</span><div class="bar o" style="width:92%"></div></div>
+  <div class="row m"><span>04</span><span>2vNc…Ty6k</span><span class="ok">Settled</span><div class="bar" style="width:66%"></div></div>
+  <div class="row m"><span>05</span><span>4cXr…Pe9w</span><span class="ok">Settled</span><div class="bar" style="width:48%"></div></div>
+  <div class="row m" style="border-bottom:0"><span>06</span><span>8hQe…Vb3n</span><span class="ok">Settled</span><div class="bar" style="width:71%"></div></div>
+</div>
+<div class="stamp m" style="left:700px;top:580px">Amounts shielded</div>
+<div class="tok"><div class="ring"></div><div class="m" style="opacity:.7">Token</div><div class="d">ZTRV</div><div class="m" style="opacity:.7">1,000,000,000</div></div>
+<div class="title d">Zentrove<span>.</span></div>
+<div class="cap m">Private stablecoin payroll<br>for remote teams</div>
+</body></html>

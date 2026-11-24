@@ -9,8 +9,7 @@ import InvestPanel from "@/components/app/InvestPanel";
 import OfferingBlocks from "@/components/app/OfferingBlocks";
 
 export async function generateStaticParams() {
-  const { getCampaigns } = await import("@/lib/mock");
-  return (await getCampaigns()).map((c) => ({ id: c.id }));
+  return [{ id: "zentrove" }, { id: "ferrolab" }];
 }
 
 async function CampaignPageContent({ params }: { params: Promise<{ id: string }> }) {
@@ -52,7 +51,9 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
               <span className="stamp text-navy">
                 {offeringStamp(c.offering.kind)}
               </span>
+              {c.sample && <span className="stamp bg-ink text-paper !border-ink">Sample</span>}
             </div>
+            {c.sample && <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">Sample campaign for demonstration — not a live raise.</p>}
             <h1 className="w-cond mt-4 text-5xl font-black uppercase leading-[0.9] text-ink md:text-7xl">{c.name}</h1>
             <p className="mt-3 max-w-2xl text-base text-ink md:text-lg">{c.tagline}</p>
             <div className="mt-6 grid max-w-2xl grid-cols-3 gap-6">
@@ -99,6 +100,48 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
             </Card>
           </FadeIn>
 
+          {/* Story */}
+          {(c.story || c.whyNow) && (
+            <FadeIn delay={0.12}>
+              <Card className="p-6">
+                {c.story && (
+                  <>
+                    <SectionTitle kicker="The pitch">The story</SectionTitle>
+                    <p className="text-sm leading-relaxed text-ink">{c.story}</p>
+                  </>
+                )}
+                {c.whyNow && (
+                  <div className={c.story ? "mt-5 border-t border-rule pt-5" : ""}>
+                    <p className="mb-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">Why now</p>
+                    <p className="text-sm leading-relaxed text-muted">{c.whyNow}</p>
+                  </div>
+                )}
+              </Card>
+            </FadeIn>
+          )}
+
+          {/* Team */}
+          {c.team && c.team.length > 0 && (
+            <FadeIn delay={0.13}>
+              <Card className="p-6">
+                <SectionTitle kicker="Team">Who&apos;s building it</SectionTitle>
+                <ul className="grid gap-4 sm:grid-cols-2">
+                  {c.team.map((t) => (
+                    <li key={t.name} className="flex gap-3 border border-rule p-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={t.avatar} alt="" className="h-12 w-12 shrink-0 border border-ink object-cover" />
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{t.name}</p>
+                        <p className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">{t.role}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted">{t.bio}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </FadeIn>
+          )}
+
           {/* Problem / Solution */}
           <FadeIn delay={0.15} className="grid gap-6 md:grid-cols-2">
             <Card className="p-6">
@@ -144,6 +187,41 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
               </div>
             </Card>
           </FadeIn>
+
+          {/* Founder updates + risks */}
+          {((c.updates && c.updates.length > 0) || (c.risks && c.risks.length > 0)) && (
+            <FadeIn delay={0.22} className="grid gap-6 md:grid-cols-2">
+              {c.updates && c.updates.length > 0 && (
+                <Card className="p-6">
+                  <SectionTitle kicker="Founder updates">Progress, in public</SectionTitle>
+                  <ol className="space-y-4">
+                    {c.updates.map((u) => (
+                      <li key={u.date + u.title} className="border-l-2 border-ink pl-3">
+                        <p className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">
+                          {new Date(u.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                        <p className="text-sm font-semibold text-ink">{u.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-muted">{u.body}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </Card>
+              )}
+              {c.risks && c.risks.length > 0 && (
+                <Card className="p-6">
+                  <SectionTitle kicker="Risks">What could go wrong</SectionTitle>
+                  <ul className="space-y-2">
+                    {c.risks.map((r) => (
+                      <li key={r} className="flex gap-2 text-sm leading-relaxed text-muted">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-signal" />
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+            </FadeIn>
+          )}
 
           {/* Milestone timeline */}
           <FadeIn delay={0.25}>

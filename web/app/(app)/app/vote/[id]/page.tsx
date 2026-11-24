@@ -8,8 +8,7 @@ import { FadeIn, PageHeader } from "@/components/app/primitives";
 import VoteClient from "@/components/app/VoteClient";
 
 export async function generateStaticParams() {
-  const { getPendingVotes } = await import("@/lib/mock");
-  return (await getPendingVotes()).map((v) => ({ id: v.campaignId }));
+  return [{ id: "ferrolab" }];
 }
 
 async function VotePageContent({ params }: { params: Promise<{ id: string }> }) {

@@ -40,8 +40,29 @@ export interface FounderProfile {
   location: string;
 }
 
+export interface TeamMember {
+  name: string;
+  role: string;
+  avatar: string;
+  bio: string;
+}
+
+export interface FounderUpdate {
+  date: string; // ISO
+  title: string;
+  body: string;
+}
+
 export interface Campaign {
   id: string;
+  /** Fictional sample campaign — UI shows a "SAMPLE" stamp. */
+  sample?: boolean;
+  /** UI-only long-form pitch fields (see content/startups.md). */
+  story?: string;
+  whyNow?: string;
+  team?: TeamMember[];
+  risks?: string[];
+  updates?: FounderUpdate[];
   founder: FounderProfile;
   name: string;
   tagline: string;
@@ -86,262 +107,194 @@ export interface VoteInfo {
   evidence: { label: string; href: string }[];
 }
 
-const img = (id: string, w = 1200) =>
-  `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=80`;
+/** Local, designed art only (no photos of real people). */
+const art = (file: string) => `/startups/${file}`;
 
 const now = Date.now();
 const days = (d: number) => new Date(now + d * 86400000).toISOString();
 
 type BaseCampaign = Omit<Campaign, "categoryKey" | "offering" | "flags">;
 
+// Both campaigns are FICTIONAL samples (SPEC "Sample campaigns (v3)"). Long-form copy lives in content/startups.md.
 const baseCampaigns: BaseCampaign[] = [
   {
-    id: "freshbox",
+    id: "zentrove",
+    sample: true,
     founder: {
-      pubkey: "FrSh7xQm2pVb9kL4nWc3TzR8eYhJ6dA1uGoP5sNqXk2",
-      name: "Maya Okafor",
+      pubkey: "ZtRv4kQm8pVb2nLc7WxT9eYh3J6dA1uGoP5sNqXk2Fm",
+      name: "Imani Vale",
       role: "Founder & CEO",
-      avatar: img("1494790108377-be9c29b29330", 200),
-      bio: "Ex-supply-chain lead at a top-5 grocer. Built and sold a cold-chain logistics startup in 2023.",
-      location: "Lisbon, PT",
+      avatar: art("zentrove-founder.png"),
+      bio: "Fictional founder. Ex-payments engineer who spent six years on payout rails and reconciliation before running a 14-person remote team paid in USDC.",
+      location: "Remote · Nairobi / Lisbon",
     },
-    name: "FreshBox",
-    tagline: "Farm-to-door produce boxes, delivered within 24h of harvest.",
-    category: "Food & Logistics",
-    image: img("1488459716781-31db52582fe9"),
+    name: "Zentrove",
+    tagline: "Private stablecoin payroll for remote teams.",
+    category: "Crypto",
+    image: art("zentrove-cover.png"),
+    story:
+      "Imani ran payroll for a 14-person remote team in USDC. It was fast and cheap until a contractor pulled up a block explorer and found every colleague's salary in about four minutes. Zentrove is the payroll tool she wanted that week: teams fund one treasury, Zentrove settles each salary in USDC on Solana with the amounts shielded, and every employee gets a compliant payslip they can show a landlord or a tax office. The chain proves everyone was paid; it no longer says how much.",
     problem:
-      "Supermarket produce travels an average of 1,500 km and sits 7–10 days before reaching a kitchen. Small farms lose up to 30% of harvest to spoilage and middlemen.",
+      "Paying a remote team in stablecoins exposes every salary on a public chain. Anyone with a wallet address can read who earns what, when raises land and when someone leaves — so most teams fall back to slow, expensive wires.",
     solution:
-      "FreshBox connects 120+ local farms to subscribers via a route-optimised cold-chain network. Harvest-to-door in under 24 hours, with farmers keeping 2x the margin.",
+      "Payroll that settles USDC on Solana with amounts shielded, plus compliant payslips. Employers upload a payroll run once; recipients receive funds to their own wallets, and only the employer, the employee and an optional auditor key can see the figures.",
+    whyNow:
+      "Stablecoin payroll moved from experiment to habit for crypto-native and cross-border teams, and confidential-transfer tooling on Solana is now mature enough to build on. Teams want the speed of USDC without publishing their compensation bands.",
+    team: [
+      { name: "Imani Vale", role: "Founder & CEO", avatar: art("zentrove-founder.png"), bio: "Ex-payments engineer; built payout and reconciliation systems." },
+      { name: "Oskar Lindgren", role: "Protocol Engineer", avatar: art("zentrove-team-ol.png"), bio: "Rust and Solana programs; owns the shielded settlement path." },
+      { name: "Priya Natarajan", role: "Head of Compliance", avatar: art("zentrove-team-pn.png"), bio: "Former payroll-compliance lead; owns payslips, tax exports and auditor keys." },
+    ],
+    risks: [
+      "Regulation of privacy features on public chains is unsettled; a jurisdiction could restrict shielded transfers, forcing a transparent fallback mode.",
+      "We depend on Solana confidential-transfer tooling and USDC; a protocol bug or issuer change would pause payroll runs.",
+      "ZTRV has no guaranteed value or listing. The token launch is a milestone, not a promise of liquidity.",
+      "Payroll is a trust product: one late run can lose a customer. Our team is small and key-person risk is real.",
+    ],
+    updates: [
+      { date: days(-3), title: "Testnet payroll #12 settled", body: "Ran a 38-recipient payroll on devnet in under 40 seconds. Explorer shows transfers, not amounts. Auditor-key export works." },
+      { date: days(-10), title: "Design partners signed", body: "Nine remote teams (6–60 people) signed letters of intent to run their first mainnet-beta payroll with us." },
+      { date: days(-18), title: "Raise opened", body: "We are raising $750k. 20% unlocks at close; the rest only if investors approve each milestone." },
+    ],
     useOfFunds: [
-      { label: "Cold-chain fleet", pct: 35 },
-      { label: "App & route engine", pct: 25 },
-      { label: "Farmer onboarding", pct: 20 },
-      { label: "Growth marketing", pct: 15 },
-      { label: "Legal & ops", pct: 5 },
+      { label: "Protocol & payroll engineering", pct: 40 },
+      { label: "Security audits", pct: 20 },
+      { label: "Compliance & payslip licensing", pct: 15 },
+      { label: "Design-partner onboarding", pct: 15 },
+      { label: "Legal & ops", pct: 10 },
+    ],
+    goalUsdc: 750_000,
+    raisedUsdc: 286_000,
+    equityBps: 0,
+    upfrontBps: 2000,
+    raiseDeadline: days(21),
+    minInvestors: 25,
+    status: "Raising",
+    milestones: [
+      {
+        index: 1,
+        title: "Private payroll live on mainnet beta",
+        description: "Shielded USDC payroll runs live on Solana mainnet beta for design partners. Evidence: public program address, third-party audit report, and an explorer link to a real run showing transfers without amounts.",
+        releaseUsdc: 200_000,
+        deadline: days(21 + 90),
+        status: "Pending",
+        evidenceUri: "",
+        resubmitUsed: false,
+      },
+      {
+        index: 2,
+        title: "100 teams running payroll",
+        description: "100 distinct employer accounts complete at least one payroll run. Evidence: on-chain count of employer treasuries with settled runs, plus a signed customer list shared with voters.",
+        releaseUsdc: 200_000,
+        deadline: days(21 + 180),
+        status: "Pending",
+        evidenceUri: "",
+        resubmitUsed: false,
+      },
+      {
+        index: 3,
+        title: "ZTRV launch + $1M monthly payroll volume",
+        description: "ZTRV mint registered and investor vesting live, and $1M USDC settled through Zentrove in a calendar month. Evidence: mint address, vesting contract, and an aggregate volume attestation from the settlement program.",
+        releaseUsdc: 200_000,
+        deadline: days(21 + 270),
+        status: "Pending",
+        evidenceUri: "",
+        resubmitUsed: false,
+      },
+    ],
+    spending: [],
+  },
+  {
+    id: "ferrolab",
+    sample: true,
+    founder: {
+      pubkey: "FeRr7xQm2pVb9kL4nWc3TzR8eYhJ6dA1uGoP5sNqLb3",
+      name: "Tomas Rieger",
+      role: "Founder & CEO",
+      avatar: art("ferrolab-founder.png"),
+      bio: "Fictional founder. Former manufacturing-line engineer who spent nine years tuning stamping and machining lines for automotive suppliers.",
+      location: "Stuttgart, DE",
+    },
+    name: "Ferrolab",
+    tagline: "AI inspection cameras for small factories.",
+    category: "SaaS",
+    image: art("ferrolab-cover.png"),
+    story:
+      "Tomas spent nine years on factory floors where the quality check was a tired person with a flashlight at the end of a shift. Big plants buy six-figure vision systems; the 40-person machine shop next door cannot. Ferrolab is a camera that clamps over an existing conveyor, learns what a good part looks like from a few hundred examples, and flags the bad ones before they ship. It costs a monthly subscription, not a capital budget, and the first install takes an afternoon.",
+    problem:
+      "Small factories catch defects by eye, losing 3–5% of output to scrap and returns. Industrial vision systems exist, but they cost six figures and need an integrator.",
+    solution:
+      "A plug-in camera + model that flags defects on the line, sold as a monthly subscription. Each unit trains on the customer's own parts, runs on-device, and sends a shift report the plant manager can actually read.",
+    whyNow:
+      "Edge hardware that can run a vision model at line speed now costs less than a monthly scrap bill, and labour shortages mean small plants can no longer staff a full-time inspector per line.",
+    team: [
+      { name: "Tomas Rieger", role: "Founder & CEO", avatar: art("ferrolab-founder.png"), bio: "Former manufacturing-line engineer; sells to and installs at every pilot." },
+      { name: "Lena Okoro", role: "ML Lead", avatar: art("ferrolab-team-lo.png"), bio: "Computer-vision engineer; owns few-shot training and on-device inference." },
+      { name: "Marek Novak", role: "Hardware & Field Ops", avatar: art("ferrolab-team-mn.png"), bio: "Ex-automation technician; designs the mount and runs installs." },
+    ],
+    risks: [
+      "Hardware margins are thin and component prices move; a supply shock would slow installs.",
+      "Each new part type needs fresh training data; accuracy on unusual parts may lag our pilot numbers.",
+      "Revenue payouts depend on subscription revenue, which can churn if a factory closes a line.",
+      "Enterprise contracts (M3) have long sales cycles and may slip past month 9.",
+    ],
+    updates: [
+      { date: days(-4), title: "M2 evidence submitted", body: "MRR hit $41.2k in the last full month. Billing export, bank statement and customer list are attached to the vote." },
+      { date: days(-22), title: "First payout deposited", body: "Paid $2,198 to investors on $31,400 of revenue — on time. 7% of monthly revenue, as promised." },
+      { date: days(-45), title: "M1 released", body: "Investors approved milestone 1: 52 cameras running at 19 paying factories. $150k released." },
+    ],
+    useOfFunds: [
+      { label: "Camera hardware", pct: 35 },
+      { label: "ML engineering", pct: 25 },
+      { label: "Factory pilot installs", pct: 20 },
+      { label: "Sales & travel", pct: 12 },
+      { label: "Legal & ops", pct: 8 },
     ],
     goalUsdc: 500_000,
     raisedUsdc: 500_000,
-    equityBps: 1000,
+    equityBps: 1200,
     upfrontBps: 2000,
-    raiseDeadline: days(-60),
+    raiseDeadline: days(-130),
     minInvestors: 25,
     status: "Active",
     milestones: [
       {
         index: 1,
-        title: "App live",
-        description: "iOS + Android app live in Lisbon with ordering, subscriptions and live delivery tracking.",
+        title: "50 cameras installed at paying factories",
+        description: "50+ Ferrolab cameras running on production lines at factories with an active paid subscription. Evidence: device registry export with serials and heartbeat logs, invoices per factory, and install photos (no faces).",
         releaseUsdc: 150_000,
-        deadline: days(-20),
+        deadline: days(-40),
         status: "Released",
-        evidenceUri: "https://freshbox.example/evidence/m1",
+        evidenceUri: "https://ferrolab.example/evidence/m1",
         resubmitUsed: false,
       },
       {
         index: 2,
-        title: "1,000 paying customers",
-        description: "1,000 active paying subscribers, verified via Stripe revenue attestation.",
+        title: "$40k monthly recurring revenue",
+        description: "$40,000 MRR in a full calendar month. Evidence: billing-system export, matching bank statement, and a customer list shared privately with voters.",
         releaseUsdc: 150_000,
-        deadline: days(5),
+        deadline: days(50),
         status: "Voting",
-        evidenceUri: "https://freshbox.example/evidence/m2",
+        evidenceUri: "https://ferrolab.example/evidence/m2",
         resubmitUsed: false,
       },
       {
         index: 3,
-        title: "$20k MRR",
-        description: "Reach $20,000 monthly recurring revenue for two consecutive months.",
+        title: "3 enterprise contracts signed",
+        description: "Three signed multi-site contracts (5+ lines each). Evidence: redacted signed contracts and a confirmation letter from each customer.",
         releaseUsdc: 100_000,
-        deadline: days(95),
+        deadline: days(140),
         status: "Pending",
         evidenceUri: "",
         resubmitUsed: false,
       },
     ],
     spending: [
-      { date: days(-55), category: "Fleet", description: "2x refrigerated vans (lease deposit)", amountUsdc: 38_400, txSig: "5kQ9…a7Fd" },
-      { date: days(-48), category: "Engineering", description: "Mobile app contract — sprint 1–4", amountUsdc: 42_000, txSig: "3hTr…Lm2x" },
-      { date: days(-40), category: "Farmers", description: "Onboarding stipends, 34 farms", amountUsdc: 17_000, txSig: "9pWe…Qz81" },
-      { date: days(-30), category: "Marketing", description: "Launch campaign, Lisbon metro", amountUsdc: 21_500, txSig: "2vNc…Ty6k" },
-      { date: days(-18), category: "Engineering", description: "Route engine v1 + infra", amountUsdc: 36_200, txSig: "7mBa…Hs4p" },
-      { date: days(-9), category: "Legal", description: "Food safety certification", amountUsdc: 6_800, txSig: "4cXr…Pe9w" },
+      { date: days(-120), category: "Hardware", description: "Camera hardware batch — 60 units", amountUsdc: 54_000, txSig: "6fRb…Kq2w" },
+      { date: days(-104), category: "Engineering", description: "ML engineer contract — defect model v2", amountUsdc: 36_000, txSig: "3nLx…Tz8e" },
+      { date: days(-80), category: "Installs", description: "Factory pilot installs — 19 sites", amountUsdc: 28_500, txSig: "9qWa…Pm4c" },
+      { date: days(-35), category: "Sales", description: "Sales travel — trade fair + site visits", amountUsdc: 9_200, txSig: "2hVe…Rn7d" },
     ],
-  },
-  {
-    id: "solgrid",
-    founder: {
-      pubkey: "SoLg4rT8mXc2bV7nQp1kWz9eYh3J6dA5uGoR2sNqLm8",
-      name: "Daniel Reyes",
-      role: "Founder",
-      avatar: img("1507003211169-0a1dd7228f2d", 200),
-      bio: "Electrical engineer, 8 years building microgrids across LatAm.",
-      location: "Mexico City, MX",
-    },
-    name: "SolGrid",
-    tagline: "Community solar microgrids for off-grid villages.",
-    category: "Climate",
-    image: img("1473341304170-971dccb5ac1e"),
-    problem: "Over 700M people lack reliable electricity.",
-    solution: "Modular, pay-as-you-go solar microgrids financed by the community.",
-    useOfFunds: [
-      { label: "Hardware", pct: 60 },
-      { label: "Installation", pct: 25 },
-      { label: "Ops", pct: 15 },
-    ],
-    goalUsdc: 750_000,
-    raisedUsdc: 412_000,
-    equityBps: 1200,
-    upfrontBps: 2000,
-    raiseDeadline: days(18),
-    minInvestors: 25,
-    status: "Raising",
-    milestones: [
-      { index: 1, title: "Pilot village online", description: "", releaseUsdc: 200_000, deadline: days(120), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 2, title: "10 villages", description: "", releaseUsdc: 200_000, deadline: days(240), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 3, title: "Break-even", description: "", releaseUsdc: 200_000, deadline: days(360), status: "Pending", evidenceUri: "", resubmitUsed: false },
-    ],
-    spending: [],
-  },
-  {
-    id: "medilink",
-    founder: {
-      pubkey: "MeDi9kL4nWc3TzR8eYhJ6dA1uGoP5sNqXk2Fr7xQm2p",
-      name: "Aisha Rahman",
-      role: "Founder & CTO",
-      avatar: img("1438761681033-6461ffad8d80", 200),
-      bio: "Physician turned engineer. Previously led clinical ML at a health-tech unicorn.",
-      location: "London, UK",
-    },
-    name: "MediLink",
-    tagline: "AI triage for rural clinics, offline-first.",
-    category: "Health",
-    image: img("1576091160399-112ba8d25d1d"),
-    problem: "Rural clinics have 1 doctor per 10,000 patients.",
-    solution: "Offline-first triage assistant for nurses and community health workers.",
-    useOfFunds: [
-      { label: "R&D", pct: 50 },
-      { label: "Clinical trials", pct: 30 },
-      { label: "Ops", pct: 20 },
-    ],
-    goalUsdc: 400_000,
-    raisedUsdc: 286_000,
-    equityBps: 800,
-    upfrontBps: 2000,
-    raiseDeadline: days(9),
-    minInvestors: 25,
-    status: "Raising",
-    milestones: [
-      { index: 1, title: "Clinical pilot", description: "", releaseUsdc: 120_000, deadline: days(90), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 2, title: "Regulatory approval", description: "", releaseUsdc: 120_000, deadline: days(200), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 3, title: "50 clinics", description: "", releaseUsdc: 80_000, deadline: days(300), status: "Pending", evidenceUri: "", resubmitUsed: false },
-    ],
-    spending: [],
-  },
-  {
-    id: "terroir",
-    founder: {
-      pubkey: "TeRr2pVb9kL4nWc3TzR8eYhJ6dA1uGoP5sNqXk2Fr7x",
-      name: "Lucas Moreau",
-      role: "Founder",
-      avatar: img("1500648767791-00dcc994a43e", 200),
-      bio: "Third-generation farmer and agronomist.",
-      location: "Bordeaux, FR",
-    },
-    name: "Terroir",
-    tagline: "Soil sensors that pay farmers for regenerative practices.",
-    category: "AgTech",
-    image: img("1500382017468-9049fed747ef"),
-    problem: "Regenerative farming is hard to verify and under-rewarded.",
-    solution: "Cheap soil sensors + carbon credit marketplace.",
-    useOfFunds: [
-      { label: "Hardware", pct: 45 },
-      { label: "Software", pct: 35 },
-      { label: "Field ops", pct: 20 },
-    ],
-    goalUsdc: 300_000,
-    raisedUsdc: 94_000,
-    equityBps: 1000,
-    upfrontBps: 2000,
-    raiseDeadline: days(26),
-    minInvestors: 25,
-    status: "Raising",
-    milestones: [
-      { index: 1, title: "100 sensors deployed", description: "", releaseUsdc: 80_000, deadline: days(100), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 2, title: "First credits sold", description: "", releaseUsdc: 80_000, deadline: days(200), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 3, title: "1,000 farms", description: "", releaseUsdc: 80_000, deadline: days(320), status: "Pending", evidenceUri: "", resubmitUsed: false },
-    ],
-    spending: [],
-  },
-  {
-    id: "kitchenos",
-    founder: {
-      pubkey: "KiTc3TzR8eYhJ6dA1uGoP5sNqXk2Fr7xQm2pVb9kL4n",
-      name: "Sofia Lindqvist",
-      role: "Founder & CEO",
-      avatar: img("1534528741775-53994a69daeb", 200),
-      bio: "Former head chef, now building software for independent restaurants.",
-      location: "Stockholm, SE",
-    },
-    name: "KitchenOS",
-    tagline: "Zero-waste inventory for independent restaurants.",
-    category: "SaaS",
-    image: img("1556909114-f6e7ad7d3136"),
-    problem: "Restaurants waste ~10% of food purchases.",
-    solution: "Computer-vision inventory that auto-orders exactly what's needed.",
-    useOfFunds: [
-      { label: "Engineering", pct: 60 },
-      { label: "Sales", pct: 30 },
-      { label: "Ops", pct: 10 },
-    ],
-    goalUsdc: 250_000,
-    raisedUsdc: 231_500,
-    equityBps: 900,
-    upfrontBps: 2000,
-    raiseDeadline: days(4),
-    minInvestors: 25,
-    status: "Raising",
-    milestones: [
-      { index: 1, title: "50 restaurants", description: "", releaseUsdc: 70_000, deadline: days(90), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 2, title: "$15k MRR", description: "", releaseUsdc: 70_000, deadline: days(180), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 3, title: "Series A ready", description: "", releaseUsdc: 60_000, deadline: days(300), status: "Pending", evidenceUri: "", resubmitUsed: false },
-    ],
-    spending: [],
-  },
-  {
-    id: "greenhaul",
-    founder: {
-      pubkey: "GrHa8eYhJ6dA1uGoP5sNqXk2Fr7xQm2pVb9kL4nWc3T",
-      name: "James Whitfield",
-      role: "Founder",
-      avatar: img("1472099645785-5658abf4ff4e", 200),
-      bio: "Ex-logistics PM. Obsessed with last-mile emissions.",
-      location: "Austin, US",
-    },
-    name: "GreenHaul",
-    tagline: "Electric cargo-bike delivery for dense cities.",
-    category: "Mobility",
-    image: img("1466692476868-aef1dfb1e735"),
-    problem: "Last-mile vans cause 25% of urban CO2 from transport.",
-    solution: "Micro-hubs + e-cargo bikes, 3x cheaper per drop.",
-    useOfFunds: [
-      { label: "Fleet", pct: 50 },
-      { label: "Hubs", pct: 30 },
-      { label: "Ops", pct: 20 },
-    ],
-    goalUsdc: 600_000,
-    raisedUsdc: 168_000,
-    equityBps: 1100,
-    upfrontBps: 2000,
-    raiseDeadline: days(33),
-    minInvestors: 25,
-    status: "Raising",
-    milestones: [
-      { index: 1, title: "First hub live", description: "", releaseUsdc: 160_000, deadline: days(100), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 2, title: "5 hubs", description: "", releaseUsdc: 160_000, deadline: days(220), status: "Pending", evidenceUri: "", resubmitUsed: false },
-      { index: 3, title: "Profitability", description: "", releaseUsdc: 160_000, deadline: days(340), status: "Pending", evidenceUri: "", resubmitUsed: false },
-    ],
-    spending: [],
   },
 ];
 
@@ -350,19 +303,21 @@ const eq = (equityBps: number, basis: "revenue" | "profit", shareBps: number, st
   equityBps,
   payout: { basis, shareBps, frequency: "monthly" as const, startsAfterDays },
 });
-const tok = (symbol: string, totalSupply: number, investorAllocationBps: number, launchInDays: number, cliffMonths = 0, months = 12, launched = false): TokenOffering => ({
-  symbol, totalSupply, investorAllocationBps, targetLaunchDate: days(launchInDays), vesting: { cliffMonths, months },
-  mint: launched ? "HAULm1nt7Qx4Yb2vNc3TzR8eYhJ6dA1uGoP5sNqXk2" : null,
-  launchedAt: launched ? days(-90) : null,
-});
 
 export const mockOfferings: Record<string, { categoryKey: CampaignCategory; category: string; offering: Offering; flags?: CampaignFlag[] }> = {
-  freshbox: { categoryKey: "business", category: "Business", offering: { kind: "equity", equity: eq(1000, "revenue", 800) } },
-  solgrid: { categoryKey: "crypto", category: "Crypto", offering: { kind: "both", equity: eq(1200, "revenue", 500, 180), token: tok("GRID", 100_000_000, 1500, 120, 3, 12) } },
-  medilink: { categoryKey: "saas", category: "SaaS", offering: { kind: "equity", equity: eq(800, "profit", 1500, 120) } },
-  terroir: { categoryKey: "crypto", category: "Crypto", offering: { kind: "token", token: tok("SOIL", 1_000_000_000, 2000, 60, 0, 18) } },
-  kitchenos: { categoryKey: "saas", category: "SaaS", offering: { kind: "equity", equity: eq(900, "revenue", 1000) } },
-  greenhaul: { categoryKey: "hardware", category: "Hardware", offering: { kind: "both", equity: eq(1100, "profit", 1200), token: tok("HAUL", 50_000_000, 1000, -20, 0, 12, true) } },
+  zentrove: {
+    categoryKey: "crypto",
+    category: "Crypto",
+    offering: {
+      kind: "token",
+      token: {
+        symbol: "ZTRV", totalSupply: 1_000_000_000, investorAllocationBps: 1500,
+        targetLaunchDate: "2027-06-30T00:00:00.000Z", vesting: { cliffMonths: 3, months: 12 },
+        mint: null, launchedAt: null,
+      },
+    },
+  },
+  ferrolab: { categoryKey: "saas", category: "SaaS", offering: { kind: "equity", equity: eq(1200, "revenue", 700, 90) } },
 };
 
 export const DEFAULT_OFFERING: Offering = { kind: "equity", equity: eq(1000, "revenue", 500) };
@@ -386,13 +341,8 @@ const period = (monthsAgo: number) => {
 };
 
 export const mockPayouts: Record<string, PayoutEntry[]> = {
-  freshbox: [
-    { period: period(1), basisAmountUsdc: 24_300, paidUsdc: 1_944, status: "ON_TIME", depositedAt: days(-20), txSig: "8hQe…Vb3n" },
-    { period: period(2), basisAmountUsdc: 21_050, paidUsdc: 1_684, status: "ON_TIME", depositedAt: days(-50), txSig: "2mLk…Rw7c" },
-    { period: period(3), basisAmountUsdc: 18_400, paidUsdc: 1_472, status: "LATE", depositedAt: days(-68), txSig: "6tPa…Jx2d" },
-  ],
-  greenhaul: [
-    { period: period(1), basisAmountUsdc: 9_800, paidUsdc: 1_176, status: "ON_TIME", depositedAt: days(-18), txSig: "4kRe…Ny9q" },
+  ferrolab: [
+    { period: period(1), basisAmountUsdc: 31_400, paidUsdc: 2_198, status: "ON_TIME", depositedAt: days(-22), txSig: "5tKe…Wb9m" },
   ],
 };
 
@@ -401,10 +351,8 @@ export async function getPayouts(id: string): Promise<PayoutEntry[]> {
 }
 
 const holdings: Holding[] = [
-  { campaignId: "freshbox", amountUsdc: 12_500, shares: 2500, equityPct: 0.25, claimablePayoutUsdc: 127.5, tokensClaimed: 0 },
-  { campaignId: "medilink", amountUsdc: 5_000, shares: 1000, equityPct: 0.1, claimablePayoutUsdc: 0, tokensClaimed: 0 },
-  { campaignId: "kitchenos", amountUsdc: 3_200, shares: 640, equityPct: 0.115, claimablePayoutUsdc: 0, tokensClaimed: 0 },
-  { campaignId: "greenhaul", amountUsdc: 4_000, shares: 800, equityPct: 0.11, claimablePayoutUsdc: 15.68, tokensClaimed: 1_200 },
+  { campaignId: "ferrolab", amountUsdc: 5_000, shares: 1000, equityPct: 0.12, claimablePayoutUsdc: 21.98, tokensClaimed: 0 },
+  { campaignId: "zentrove", amountUsdc: 2_500, shares: 500, equityPct: 0, claimablePayoutUsdc: 0, tokensClaimed: 0 },
 ];
 
 // ---- Offering helpers (pure; safe on server and client) ----
@@ -448,24 +396,23 @@ export const MOCK_NOW = now;
 
 const votes: VoteInfo[] = [
   {
-    campaignId: "freshbox",
+    campaignId: "ferrolab",
     milestoneIndex: 2,
-    opensAt: days(-2),
+    opensAt: days(-3),
     closesAt: new Date(now + 4 * 86400000 + 7 * 3600000 + 23 * 60000).toISOString(),
     quorumPct: 14,
     quorumRequiredPct: 20,
     evidence: [
-      { label: "Stripe revenue attestation (signed)", href: "#" },
-      { label: "Subscriber count dashboard — read-only", href: "#" },
-      { label: "Independent auditor letter (PDF)", href: "#" },
-      { label: "App store listings", href: "#" },
+      { label: "Billing-system MRR export (signed)", href: "#" },
+      { label: "Matching bank statement — redacted", href: "#" },
+      { label: "Customer list (shared privately with voters)", href: "#" },
+      { label: "Device registry — active cameras", href: "#" },
     ],
   },
 ];
 
-export const refundsClaimable = [
-  { campaign: "Orbital Brew", amountUsdc: 1_840, reason: "Milestone 2 rejected — remaining funds refunded" },
-];
+/** No refunds in the sample set. */
+export const refundsClaimable: { campaign: string; amountUsdc: number; reason: string }[] = [];
 
 export async function getCampaigns(): Promise<Campaign[]> {
   return campaigns;

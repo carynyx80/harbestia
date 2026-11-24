@@ -68,121 +68,70 @@ const iso = (t: number) => new Date(t).toISOString();
 const m = (index: number, title: string, description: string, releaseUsdc: number, deadline: number, status: Milestone["status"] = "Pending", evidenceUri: string | null = null): Milestone =>
   ({ index, title, description, releaseUsdc, deadline: iso(deadline), status, evidenceUri, resubmitUsed: false });
 
+/**
+ * Sample campaigns (SPEC.md "Sample campaigns (v3)"). Both are FICTIONAL: every object carries
+ * `sample: true`, founders are invented, and founder pubkeys are obvious placeholders.
+ */
 export function seed(store: Store, now = Date.now()) {
   const month = 30 * DAY_MS;
-  const freshbox: Campaign = {
-    id: "freshbox",
-    founder: "FrEsHbXq4m7Vt8u2y5cJ9kD1nP3rS6wA0bL2eH4gT7z",
-    name: "FreshBox",
-    tagline: "Farm-fresh produce boxes, delivered in 24 hours.",
-    problem: "Urban households waste 30% of grocery spend on produce that spoils before it is eaten.",
-    solution: "Subscription boxes sourced from local farms within 100 km, right-sized by an app that learns what you actually cook.",
-    useOfFunds: ["Mobile app development", "Cold-chain delivery vans", "Farm partnerships", "Customer acquisition"],
-    goalUsdc: 500_000, raisedUsdc: 500_000, equityBps: 1000, upfrontBps: 2000,
-    raiseDeadline: iso(now - 200 * DAY_MS), minInvestors: 25, status: "Active",
-    category: "business",
-    offering: { kind: "equity", equity: { equityBps: 1000, payout: { basis: "revenue", shareBps: 800, frequency: "monthly", startsAfterDays: 90 } } },
+
+  // 1. Zentrove: crypto, token offering, Raising.
+  const zentroveClose = now + 21 * DAY_MS;
+  const zentrove: Campaign = {
+    id: "zentrove",
+    founder: "SampLeZentroveFounderPLaceho1der11111111111",
+    name: "Zentrove",
+    tagline: "Private stablecoin payroll for remote teams.",
+    problem: "Paying a remote team in stablecoins exposes every salary on a public chain.",
+    solution: "Payroll that settles USDC on Solana with amounts shielded, plus compliant payslips.",
+    useOfFunds: ["Payroll engine", "Security audits", "Compliance & payslips", "Team onboarding"],
+    goalUsdc: 750_000, raisedUsdc: 286_000, equityBps: 0, upfrontBps: 2000,
+    raiseDeadline: iso(zentroveClose), minInvestors: 25, status: "Raising",
+    category: "crypto",
+    offering: { kind: "token", token: { symbol: "ZTRV", totalSupply: 1_000_000_000, investorAllocationBps: 1500, targetLaunchDate: new Date("2027-06-30T00:00:00.000Z").toISOString(), vesting: { cliffMonths: 3, months: 12 } } },
     milestones: [
-      m(0, "App live", "iOS + Android app live in the stores with ordering and delivery tracking.", 150_000, now + 1 * month, "Voting", "ipfs://bafyfreshboxapplive"),
-      m(1, "1,000 paying customers", "1,000 customers with at least one paid box, verified via payment processor attestation.", 150_000, now + 4 * month),
-      m(2, "$20k MRR", "Monthly recurring revenue of $20,000 sustained for one full month.", 100_000, now + 7 * month),
+      m(0, "Private payroll live on mainnet beta", "Shielded USDC payroll runs on Solana mainnet beta for pilot teams.", 200_000, zentroveClose + 3 * month),
+      m(1, "100 teams running payroll", "100 distinct teams have run at least one private payroll cycle.", 200_000, zentroveClose + 6 * month),
+      m(2, "ZTRV launch + $1M monthly payroll volume", "ZTRV token launched and $1M of payroll settled in one calendar month.", 200_000, zentroveClose + 9 * month),
+    ],
+    spending: [],
+    sample: true,
+  };
+
+  // 2. Ferrolab: saas (hardware + software), equity + 7% monthly revenue payouts, Active.
+  const ferrolabClose = now - 130 * DAY_MS;
+  const ferrolab: Campaign = {
+    id: "ferrolab",
+    founder: "SampLeFerroLabFounderPLaceho1der11111111111",
+    name: "Ferrolab",
+    tagline: "AI inspection cameras for small factories.",
+    problem: "Small factories catch defects by eye, losing 3–5% of output to scrap and returns.",
+    solution: "A plug-in camera + model that flags defects on the line, sold as a monthly subscription.",
+    useOfFunds: ["Camera hardware", "ML engineering", "Factory installs", "Sales & support"],
+    goalUsdc: 500_000, raisedUsdc: 500_000, equityBps: 1200, upfrontBps: 2000,
+    raiseDeadline: iso(ferrolabClose), minInvestors: 25, status: "Active",
+    category: "saas",
+    offering: { kind: "equity", equity: { equityBps: 1200, payout: { basis: "revenue", shareBps: 700, frequency: "monthly", startsAfterDays: 90 } } },
+    milestones: [
+      m(0, "50 cameras installed at paying factories", "50 cameras live on production lines at paying customer factories.", 150_000, ferrolabClose + 3 * month, "Released", "ipfs://bafysampleferrolabm1"),
+      m(1, "$40k monthly recurring revenue", "$40,000 MRR sustained for one full month, verified via billing attestation.", 150_000, ferrolabClose + 6 * month, "Voting", "ipfs://bafysampleferrolabm2"),
+      m(2, "3 enterprise contracts signed", "Three signed multi-site enterprise contracts.", 100_000, ferrolabClose + 9 * month),
     ],
     spending: [
-      { id: "sp-1", date: iso(now - 50 * DAY_MS), description: "Contract mobile dev agency (upfront tranche)", amountUsdc: 42_000, milestoneIndex: 0, txSig: null },
-      { id: "sp-2", date: iso(now - 30 * DAY_MS), description: "Refrigerated van lease (3 months)", amountUsdc: 18_500, milestoneIndex: null, txSig: null },
+      { id: "sp-ferrolab-1", date: iso(now - 120 * DAY_MS), description: "Camera hardware batch (60 units)", amountUsdc: 38_000, milestoneIndex: 0, txSig: null },
+      { id: "sp-ferrolab-2", date: iso(now - 100 * DAY_MS), description: "ML engineer contract (3 months)", amountUsdc: 27_500, milestoneIndex: 0, txSig: null },
+      { id: "sp-ferrolab-3", date: iso(now - 70 * DAY_MS), description: "Factory pilot installs", amountUsdc: 14_200, milestoneIndex: 0, txSig: null },
+      { id: "sp-ferrolab-4", date: iso(now - 25 * DAY_MS), description: "Sales travel", amountUsdc: 6_300, milestoneIndex: 1, txSig: null },
     ],
+    sample: true,
   };
-  const solar: Campaign = {
-    id: "sunshare-coop",
-    founder: "SoLaRcoop9xK2mV7tB4nQ8wE1rY5uI3oP6aS0dF2gH4j",
-    name: "SunShare Co-op",
-    tagline: "Community-owned rooftop solar for apartment blocks.",
-    problem: "Renters cannot install solar and pay rising grid prices with no ownership upside.",
-    solution: "A co-op installs shared rooftop arrays on apartment blocks and sells power to residents below grid price.",
-    useOfFunds: ["Panels and inverters", "Installation crews", "Permitting", "Metering software"],
-    goalUsdc: 750_000, raisedUsdc: 318_000, equityBps: 1500, upfrontBps: 2000,
-    raiseDeadline: iso(now + 21 * DAY_MS), minInvestors: 25, status: "Raising",
-    category: "business",
-    offering: {
-      kind: "both",
-      equity: { equityBps: 1500, payout: { basis: "revenue", shareBps: 1000, frequency: "monthly", startsAfterDays: 90 } },
-      token: { symbol: "SUN", totalSupply: 100_000_000, investorAllocationBps: 1500, targetLaunchDate: iso(now + 10 * month), vesting: { cliffMonths: 0, months: 12 } },
-    },
-    milestones: [
-      m(0, "First 3 rooftops online", "Three buildings generating and metered.", 250_000, now + 4 * month),
-      m(1, "500 resident subscribers", "500 households on co-op power contracts.", 200_000, now + 8 * month),
-      m(2, "Cash-flow positive", "Two consecutive months of positive operating cash flow.", 150_000, now + 12 * month),
-    ],
-    spending: [],
-  };
-  const game: Campaign = {
-    id: "lantern-games",
-    founder: "LaNtErNgm5hJ8kL1zX4cV7bN2mQ9wE3rT6yU0iO5pA8s",
-    name: "Lantern Games",
-    tagline: "A cozy co-op adventure built by a five-person indie studio.",
-    problem: "Indie studios give up most of their upside to publishers to fund development.",
-    solution: "Fund the vertical slice and launch directly from the community, with milestones tied to playable builds.",
-    useOfFunds: ["Two additional developers", "Art and music", "Steam launch marketing"],
-    goalUsdc: 250_000, raisedUsdc: 0, equityBps: 0, upfrontBps: 2000,
-    raiseDeadline: iso(now + 45 * DAY_MS), minInvestors: 25, status: "Draft",
-    category: "creator",
-    offering: { kind: "token", token: { symbol: "LNTRN", totalSupply: 1_000_000_000, investorAllocationBps: 2000, targetLaunchDate: iso(now + 15 * month), vesting: { cliffMonths: 0, months: 12 } } },
-    milestones: [
-      m(0, "Playable vertical slice", "30-minute playable demo released to investors.", 80_000, now + 5 * month),
-      m(1, "Steam Next Fest demo", "Public demo with 10,000 wishlists.", 70_000, now + 9 * month),
-      m(2, "1.0 launch", "Full release on Steam.", 50_000, now + 14 * month),
-    ],
-    spending: [],
-  };
-  const tidepool: Campaign = {
-    id: "tidepool",
-    founder: "TiDePoOL3qW8eR2tY6uI1oP5aS9dF4gH7jK0lZ3xC6v",
-    name: "Tidepool",
-    tagline: "Private, intent-based liquidity pools on Solana.",
-    problem: "On-chain LPs leak their positions and get front-run by searchers.",
-    solution: "A shielded AMM where LP positions and swap intents are encrypted until settlement.",
-    useOfFunds: ["Protocol engineering", "Security audits", "Liquidity incentives", "Community grants"],
-    goalUsdc: 400_000, raisedUsdc: 162_000, equityBps: 0, upfrontBps: 2000,
-    raiseDeadline: iso(now + 30 * DAY_MS), minInvestors: 25, status: "Raising",
-    category: "crypto",
-    offering: { kind: "token", token: { symbol: "TIDE", totalSupply: 500_000_000, investorAllocationBps: 1200, targetLaunchDate: iso(now + 6 * month), vesting: { cliffMonths: 3, months: 18 } } },
-    milestones: [
-      m(0, "Testnet launch", "Shielded pools live on devnet with public bug bounty.", 120_000, now + 3 * month),
-      m(1, "Audits complete", "Two independent audits published with all criticals fixed.", 100_000, now + 6 * month),
-      m(2, "Mainnet + $5M TVL", "Mainnet launch sustaining $5M TVL for 30 days.", 80_000, now + 10 * month),
-    ],
-    spending: [],
-  };
-  const kiln: Campaign = {
-    id: "kiln-coffee",
-    founder: "KiLnCoFfEe7aS2dF5gH8jK1lZ4xC7vB0nM3qW6eR9tY",
-    name: "Kiln Coffee",
-    tagline: "Small-batch roasted coffee, sold direct and in 40 cafes.",
-    problem: "Specialty roasters stay small because banks will not lend against brand growth.",
-    solution: "Expand roasting capacity and wholesale reach, sharing 12% of monthly profit with investors.",
-    useOfFunds: ["Second roaster", "Wholesale sales team", "Packaging line", "Working capital"],
-    goalUsdc: 300_000, raisedUsdc: 87_500, equityBps: 800, upfrontBps: 2000,
-    raiseDeadline: iso(now + 35 * DAY_MS), minInvestors: 25, status: "Raising",
-    category: "consumer",
-    offering: { kind: "equity", equity: { equityBps: 800, payout: { basis: "profit", shareBps: 1200, frequency: "monthly", startsAfterDays: 90 } } },
-    milestones: [
-      m(0, "Second roaster installed", "New 15 kg roaster commissioned and producing.", 100_000, now + 3 * month),
-      m(1, "100 wholesale accounts", "100 active cafe and grocery accounts.", 80_000, now + 7 * month),
-      m(2, "Profitable quarter", "One full quarter of positive net profit.", 60_000, now + 11 * month),
-    ],
-    spending: [],
-  };
-  for (const c of [freshbox, solar, game, tidepool, kiln]) store.campaigns.set(c.id, c);
-  store.investorCount.set("freshbox", 41);
-  store.investorCount.set("sunshare-coop", 19);
-  store.investorCount.set("lantern-games", 0);
-  store.investorCount.set("tidepool", 23);
-  store.investorCount.set("kiln-coffee", 12);
-  store.openRound("freshbox", 0, now - 2 * DAY_MS);
-  // FreshBox: 3 past payout periods (8% of monthly revenue), each deposited 5 days after period end -> ON_TIME.
-  const close = Date.parse(freshbox.raiseDeadline);
-  [9_000, 12_500, 16_000].forEach((revenue, i) => {
-    const p = payoutPeriod(close, 90, i + 1);
-    store.recordPayout("freshbox", { period: i + 1, basisAmountUsdc: revenue, paidUsdc: payoutAmountUsdc(revenue, 800), depositedAt: p.end + 5 * DAY_MS, reportUri: `ipfs://bafyfreshboxreport${i + 1}`, txSig: null }, freshbox.raisedUsdc);
-  });
+
+  for (const c of [zentrove, ferrolab]) store.campaigns.set(c.id, c);
+  store.investorCount.set("zentrove", 41);
+  store.investorCount.set("ferrolab", 63);
+  // Ferrolab M2 is voting now: open round started 2 days ago.
+  store.openRound("ferrolab", 1, now - 2 * DAY_MS);
+  // Ferrolab: 1 payout period (7% of revenue), deposited 5 days after period end -> ON_TIME.
+  const p1 = payoutPeriod(ferrolabClose, 90, 1);
+  store.recordPayout("ferrolab", { period: 1, basisAmountUsdc: 31_400, paidUsdc: payoutAmountUsdc(31_400, 700), depositedAt: p1.end + 5 * DAY_MS, reportUri: "ipfs://bafysampleferrolabreport1", txSig: null }, ferrolab.raisedUsdc);
 }

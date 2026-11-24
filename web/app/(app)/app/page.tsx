@@ -85,6 +85,7 @@ async function ExploreContent({ searchParams }: { searchParams: Promise<{ kind?:
                     >
                       {c.status}
                     </span>
+                    {c.sample && <span className="stamp bg-signal text-ink !border-ink">Sample</span>}
                   </div>
                   <div className="absolute right-3 top-3 grid h-8 w-8 place-items-center bg-ink text-paper opacity-0 transition group-hover:opacity-100">
                     <ArrowUpRight className="h-4 w-4" />
@@ -121,6 +122,7 @@ async function ExploreContent({ searchParams }: { searchParams: Promise<{ kind?:
                       <Clock className="h-3.5 w-3.5" /> {c.status === "Raising" ? `${daysLeft}d` : "Funded"}
                     </span>
                   </div>
+                  {c.sample && <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">Sample campaign for demonstration — not a live raise.</p>}
                 </div>
               </Link>
             </FadeIn>

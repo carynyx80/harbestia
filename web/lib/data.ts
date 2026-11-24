@@ -57,6 +57,12 @@ function toUi(c: ApiCampaign, all: Campaign[]): Campaign {
   const base = Math.floor(100 / n);
   return {
     id: c.id,
+    sample: (c as { sample?: boolean }).sample ?? m?.sample ?? false,
+    story: m?.story,
+    whyNow: m?.whyNow,
+    team: m?.team,
+    risks: m?.risks,
+    updates: m?.updates,
     founder,
     name: c.name,
     tagline: c.tagline,

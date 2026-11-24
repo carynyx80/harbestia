@@ -83,7 +83,7 @@ test("exit window is 7 days after a vote", () => {
   assert.equal(R.canExit(0, 7 * R.DAY_MS), false);
 });
 
-test("money math: FreshBox upfront, fee, locked, pro-rata", () => {
+test("money math: Ferrolab-style upfront, fee, locked, pro-rata", () => {
   const c = { goalUsdc: 500_000, raisedUsdc: 500_000, upfrontBps: 2000, milestones: [ms({ status: "Released" }), ms(), ms({ releaseUsdc: 100_000 })] };
   assert.equal(R.upfrontUsdc(c), 100_000);
   assert.equal(R.successFeeUsdc(500_000), 25_000);

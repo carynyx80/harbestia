@@ -4,9 +4,9 @@ import { CountUp } from "@/components/ui/countup";
 
 const milestones = [
   { t: "Upfront release", a: "20%", s: "done" },
-  { t: "MVP + 500 boxes shipped", a: "25%", s: "done" },
-  { t: "Cold-chain partner signed", a: "25%", s: "voting" },
-  { t: "3 cities live", a: "30%", s: "pending" },
+  { t: "M1 · 50 cameras at paying factories", a: "30%", s: "done" },
+  { t: "M2 · $40k monthly recurring revenue", a: "30%", s: "voting" },
+  { t: "M3 · 3 enterprise contracts signed", a: "20%", s: "pending" },
 ];
 
 export function Hero() {
@@ -47,22 +47,22 @@ function TermSheet() {
     <article className="border-2 border-ink bg-paper">
       <header className="flex items-center justify-between border-b-2 border-ink bg-ink px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] text-paper">
         <span>Term sheet · No. 0042</span>
-        <span className="stamp border-signal text-signal">Active</span>
+        <span className="flex items-center gap-2"><span className="stamp bg-signal text-ink !border-signal">Sample</span><span className="stamp border-signal text-signal">Active</span></span>
       </header>
       <div className="grid grid-cols-[120px_1fr] border-b border-ink sm:grid-cols-[160px_1fr]">
         <figure className="group relative border-r border-ink">
-          <img src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80" alt="Fresh produce" className="photo h-full min-h-[120px] w-full object-cover" />
+          <img src="/startups/ferrolab-cover.png" alt="Ferrolab cover art" className="photo h-full min-h-[120px] w-full object-cover" />
         </figure>
         <div className="p-4">
-          <div className="w-cond display text-3xl font-black uppercase leading-none">FreshBox</div>
-          <div className="mt-1 text-sm text-muted">Farm-to-door produce boxes</div>
-          <div className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">Equity 10% · 8% of revenue paid monthly</div>
+          <div className="w-cond display text-3xl font-black uppercase leading-none">Ferrolab</div>
+          <div className="mt-1 text-sm text-muted">AI inspection cameras for small factories</div>
+          <div className="mt-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">Equity 12% · 7% of revenue paid monthly</div>
         </div>
       </div>
       <div className="grid grid-cols-2 border-b border-ink">
         <div className="border-r border-ink p-4">
           <div className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">Raised</div>
-          <div className="display mt-1 text-3xl font-black"><CountUp to={412800} prefix="$" /></div>
+          <div className="display mt-1 text-3xl font-black"><CountUp to={500000} prefix="$" /></div>
         </div>
         <div className="p-4">
           <div className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">Goal</div>
@@ -70,8 +70,8 @@ function TermSheet() {
         </div>
       </div>
       <div className="border-b border-ink px-4 py-3">
-        <div className="flex justify-between font-mono text-[11px] uppercase tracking-[0.08em]"><span>Filled</span><span className="font-semibold">82.6%</span></div>
-        <div className="mt-2 h-3 border border-ink"><div className="h-full bg-signal" style={{ width: "82.6%" }} /></div>
+        <div className="flex justify-between font-mono text-[11px] uppercase tracking-[0.08em]"><span>Filled</span><span className="font-semibold">100%</span></div>
+        <div className="mt-2 h-3 border border-ink"><div className="h-full bg-signal" style={{ width: "100%" }} /></div>
       </div>
       <table className="w-full text-sm">
         <thead>
@@ -85,16 +85,27 @@ function TermSheet() {
               <td className={`px-4 py-2.5 ${m.s === "pending" ? "text-muted" : ""}`}>{m.t}</td>
               <td className="px-2 py-2.5 text-right font-mono tabular">{m.a}</td>
               <td className="px-4 py-2.5 text-right">
-                {m.s === "done" ? <span className="stamp">Funded</span> : m.s === "voting" ? <span className="stamp bg-signal text-ink !border-ink">Voting · 4d</span> : <span className="stamp text-muted">Pending</span>}
+                {m.s === "done" ? <span className="stamp">Released</span> : m.s === "voting" ? <span className="stamp bg-signal text-ink !border-ink">Voting · 4d</span> : <span className="stamp text-muted">Pending</span>}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      <div className="border-b border-ink">
+        <div className="flex items-center justify-between border-b border-rule bg-ink/[0.03] px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">
+          <span>Payout ledger · monthly</span><span>63 investors</span>
+        </div>
+        <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-4 py-2.5 text-sm">
+          <span className="font-mono text-[11px] uppercase tracking-[0.08em]">Period 01 · revenue $31,400</span>
+          <span className="font-mono tabular">$2,198 → investors</span>
+          <span className="stamp">On time</span>
+        </div>
+      </div>
       <footer className="flex items-center justify-between px-4 py-3">
         <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.1em]"><Lock size={13} /> Your stake</span>
         <span className="flex items-center gap-2 font-mono text-sm"><span className="redact">$00,000</span><span className="text-[11px] uppercase tracking-[0.08em] text-muted">private</span></span>
       </footer>
+      <p className="border-t border-ink px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">Sample campaign for demonstration — not a live raise.</p>
     </article>
   );
 }
