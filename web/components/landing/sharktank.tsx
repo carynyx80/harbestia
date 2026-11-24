@@ -16,12 +16,12 @@ const rows: [string, boolean, boolean, boolean][] = [
   ["Founders public and accountable", true, false, true],
 ];
 
-const categories = ["Apps", "DeFi", "Games", "AI & infra", "Consumer brands", "Hardware", "Creators", "Anything onchain"];
+const categories = ["Local businesses", "Consumer brands", "SaaS", "Hardware", "Crypto & DeFi", "AI & infra", "Creators", "Anything else"];
 
 function Mark({ on, hl }: { on: boolean; hl?: boolean }) {
   return on
-    ? <span className={`mx-auto grid h-6 w-6 place-items-center border-2 border-ink ${hl ? "bg-ink text-signal" : "text-ink"}`} aria-label="Yes"><Check size={13} strokeWidth={3} /></span>
-    : <span className="mx-auto grid h-6 w-6 place-items-center text-muted" aria-label="No"><Minus size={14} /></span>;
+    ? <span className={`mx-auto grid h-6 w-6 place-items-center border-2 border-ink ${hl ? "bg-ink text-signal" : "text-ink"}`} role="img" aria-label="Yes"><Check size={13} strokeWidth={3} /></span>
+    : <span className="mx-auto grid h-6 w-6 place-items-center text-muted" role="img" aria-label="No"><Minus size={14} /></span>;
 }
 
 export function SharkTank() {

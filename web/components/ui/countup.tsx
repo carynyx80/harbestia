@@ -2,11 +2,13 @@
 import { useEffect, useRef, useState } from "react";
 
 export function CountUp({ to, prefix = "", suffix = "", duration = 1200 }: { to: number; prefix?: string; suffix?: string; duration?: number }) {
-  const [v, setV] = useState(0);
+  // Start at the final value so SSR, no-JS and reduced-motion users see the real number.
+  const [v, setV] = useState(to);
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
     const io = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return;

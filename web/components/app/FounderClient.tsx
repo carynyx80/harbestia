@@ -203,7 +203,7 @@ export default function FounderClient({
           <Err msg={createErr} />
           {createdId && <p role="status" className="mt-2 text-center text-xs text-signal-ink">Draft created · id {createdId} (awaiting reviewer approval)</p>}
           <p className="mt-3 text-center text-[11px] text-muted">
-            5% success fee on raise · min 25 investors · your profile is public, investors stay private
+            5% success fee on raise · min 25 investors · your profile is public · investor privacy is in development
           </p>
         </Card>
       </FadeIn>

@@ -65,8 +65,8 @@ async function PortfolioContent() {
   return (
     <>
       <PageHeader
-        title="Private portfolio"
-        subtitle="Only you can see this. Balances live in Helius Privacy Rings and are decrypted locally with your viewing key."
+        title="Portfolio"
+        subtitle="Your positions, payouts and votes. Private balances (Helius Privacy Rings) are in development — deposits are currently plain, publicly visible USDC transfers."
       />
       <PortfolioClient
         rows={rows}

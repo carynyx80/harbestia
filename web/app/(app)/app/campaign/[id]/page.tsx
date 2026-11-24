@@ -21,11 +21,13 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
   const payouts = await getPayouts(c.id);
 
   const upfront = (c.goalUsdc * c.upfrontBps) / 10000;
-  const released = upfront + c.milestones.filter((m) => m.status === "Released").reduce((a, m) => a + m.releaseUsdc, 0);
+  const released = c.status === "Raising" ? 0 : upfront + c.milestones.filter((m) => m.status === "Released").reduce((a, m) => a + m.releaseUsdc, 0);
   const funded = Math.min(c.raisedUsdc, c.goalUsdc);
-  const locked = c.lockedUsdc ?? Math.max(0, funded - (c.status === "Raising" ? 0 : released));
+  const locked = c.status === "Raising" ? c.raisedUsdc : c.lockedUsdc ?? Math.max(0, funded - released);
   const pct = (c.raisedUsdc / c.goalUsdc) * 100;
   const spent = c.spending.reduce((a, s) => a + s.amountUsdc, 0);
+  const votingMs = c.milestones.find((m) => m.status === "Voting");
+  const nextMs = votingMs ?? c.milestones.find((m) => m.status === "Pending");
 
   const timeline = [
     { label: "Upfront release", title: "Raise closed", amount: upfront, status: (c.status === "Raising" ? "Pending" : "Released") as MilestoneStatus, deadline: c.raiseDeadline, idx: "0" },
@@ -68,7 +70,7 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
               </div>
               <div>
                 <div className="text-2xl font-semibold text-navy">{fmtUsd(locked)}</div>
-                <div className="text-xs text-muted">locked in safe</div>
+                <div className="text-xs text-muted">{c.status === "Raising" ? "held in treasury" : "locked in treasury"}</div>
               </div>
             </div>
             <ProgressBar value={pct} className="mt-5 max-w-2xl" />
@@ -347,17 +349,23 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
               </div>
               <p className="mt-2 text-xs leading-relaxed text-muted">
                 For 7 days after each milestone vote, you may exit and withdraw your pro-rata share of locked funds.
-                Shares are burned. Refund math runs privately in Arcium MPC.
+                Shares are burned and the company treasury sends your USDC back.
               </p>
               <div className="mt-3 bg-paper px-3 py-2 text-xs text-muted">
-                Next window opens when <span className="text-ink">M2 voting closes</span>
+                {c.status === "Raising" ? (
+                  <>First window opens after the <span className="text-ink">M1 vote</span>, once the raise closes</>
+                ) : nextMs ? (
+                  <>Next window opens when <span className="text-ink">M{nextMs.index} voting closes</span></>
+                ) : (
+                  <>No further milestone votes scheduled</>
+                )}
               </div>
             </Card>
           </FadeIn>
           <FadeIn delay={0.25}>
             <Card className="grid grid-cols-2 gap-px overflow-hidden bg-ink/[0.04] p-0">
               {[
-                ["Investors", "Private"],
+                ["Investors", String(c.investorCount ?? "—")],
                 ["Min investors", String(c.minInvestors)],
                 ["Success fee", "5%"],
                 ["Upfront", `${c.upfrontBps / 100}%`],

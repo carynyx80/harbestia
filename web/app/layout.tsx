@@ -14,20 +14,20 @@ const SITE_URL = "https://www.harvestia.xyz";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Harvestia — Pitch in public. Invest invisible.",
-  description: "Shark Tank for startups: founders pitch in public, investors back them privately, and funds stay locked until milestones are hit. Built on Solana.",
+  description: "Shark Tank for startups on Solana: founders pitch in public, investors back them in USDC, and funds are released milestone by milestone after investors vote.",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: SITE_URL,
     siteName: "Harvestia",
     title: "Harvestia — Pitch in public. Invest invisible.",
-    description: "Shark Tank for startups on Solana. Founders public, investors invisible, funds locked until they deliver.",
+    description: "Shark Tank for startups on Solana. Founders pitch in public; funds are released only as milestones are hit.",
     images: [{ url: "/og.png", width: 1500, height: 600, alt: "Harvestia — Pitch in public. Invest invisible." }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Harvestia — Pitch in public. Invest invisible.",
-    description: "Shark Tank for startups on Solana. Founders public, investors invisible, funds locked until they deliver.",
+    description: "Shark Tank for startups on Solana. Founders pitch in public; funds are released only as milestones are hit.",
     images: ["/og.png"],
   },
 };

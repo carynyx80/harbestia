@@ -54,7 +54,7 @@ export default function OfferingBlocks({ offering, payouts, flags }: { offering:
             </dl>
           )}
         </div>
-        <p className="mt-4 text-[11px] text-muted">Milestone safe, private voting, refunds, exits and the 5% success fee apply to every offering.</p>
+        <p className="mt-4 text-[11px] text-muted">Milestone-gated releases, investor voting, refunds, exits and the 5% success fee apply to every offering.</p>
       </Card>
 
       {eq && (
@@ -97,7 +97,7 @@ export default function OfferingBlocks({ offering, payouts, flags }: { offering:
               </table>
             </div>
           )}
-          <p className="mt-3 text-[11px] text-muted">Totals are public; each investor&apos;s share is claimed privately. 3 consecutive LATE periods flag PayoutDefault.</p>
+          <p className="mt-3 text-[11px] text-muted">Totals are public; the treasury pays each investor&apos;s pro-rata share (private claims are in development). 3 consecutive LATE periods flag PayoutDefault.</p>
         </Card>
       )}
 

@@ -27,7 +27,7 @@ async function VotePageContent({ params }: { params: Promise<{ id: string }> }) 
       </FadeIn>
       <PageHeader
         title={`Vote: ${c.name} — Milestone ${m.index}`}
-        subtitle="Review the evidence and cast a private, stake-weighted vote. Missed milestones refund remaining funds to investors."
+        subtitle={`${c.sample ? "Sample campaign — this vote is a demonstration and voting is disabled. " : ""}Investors review the evidence and cast a stake-weighted vote. Rejected milestones refund remaining funds to investors.`}
       />
       <FadeIn delay={0.1}>
         <VoteClient
@@ -42,6 +42,7 @@ async function VotePageContent({ params }: { params: Promise<{ id: string }> }) 
           quorumPct={v.quorumPct}
           quorumRequiredPct={v.quorumRequiredPct}
           evidence={v.evidence}
+          sample={!!c.sample}
         />
       </FadeIn>
     </>

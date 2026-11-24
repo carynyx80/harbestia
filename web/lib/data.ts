@@ -79,6 +79,7 @@ function toUi(c: ApiCampaign, all: Campaign[]): Campaign {
         : c.useOfFunds.map((label, i) => ({ label, pct: i === 0 ? 100 - base * (n - 1) : base })),
     goalUsdc: c.goalUsdc,
     raisedUsdc: c.raisedUsdc,
+    investorCount: (c as { investorCount?: number }).investorCount ?? m?.investorCount,
     equityBps: c.equityBps,
     upfrontBps: c.upfrontBps,
     raiseDeadline: c.raiseDeadline,

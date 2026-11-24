@@ -18,6 +18,7 @@ type Props = {
   quorumPct: number;
   quorumRequiredPct: number;
   evidence: { label: string; href: string }[];
+  sample?: boolean;
 };
 
 function useCountdown(target: string) {
@@ -50,7 +51,7 @@ export default function VoteClient(p: Props) {
 
   const [error, setError] = useState<string | null>(null);
   const cast = async () => {
-    if (!choice) return;
+    if (!choice || p.sample) return;
     setError(null);
     setPhase("encrypting");
     try {
@@ -73,20 +74,39 @@ export default function VoteClient(p: Props) {
           <p className="-mt-2 text-sm text-muted">{p.description}</p>
           <div className="mt-6 font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Evidence submitted by founder</div>
           <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-            {p.evidence.map((e) => (
-              <li key={e.label}>
-                <a
-                  href={e.href}
-                  className="group flex items-center gap-3 border border-ink bg-paper p-3.5 text-sm text-ink transition hover:border-ink hover:bg-ink/[0.04]"
-                >
+            {p.evidence.map((e) => {
+              // Sample campaigns have placeholder evidence: show it as a label, not a dead link.
+              const real = !!e.href && e.href !== "#" && /^https?:\/\//.test(e.href) && !e.href.includes("bafysample");
+              const inner = (
+                <>
                   <span className="grid h-9 w-9 shrink-0 place-items-center bg-ink/[0.05] text-muted group-hover:text-signal-ink">
                     <FileText className="h-4 w-4" />
                   </span>
                   <span className="flex-1">{e.label}</span>
-                  <ExternalLink className="h-3.5 w-3.5 text-muted group-hover:text-ink" />
-                </a>
-              </li>
-            ))}
+                  {real ? (
+                    <ExternalLink className="h-3.5 w-3.5 text-muted group-hover:text-ink" />
+                  ) : (
+                    <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">Sample</span>
+                  )}
+                </>
+              );
+              return (
+                <li key={e.label}>
+                  {real ? (
+                    <a
+                      href={e.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group flex items-center gap-3 border border-ink bg-paper p-3.5 text-sm text-ink transition hover:border-ink hover:bg-ink/[0.04]"
+                    >
+                      {inner}
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-3 border border-ink/40 bg-paper p-3.5 text-sm text-ink">{inner}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Card>
 
@@ -103,7 +123,7 @@ export default function VoteClient(p: Props) {
                   key={c}
                   whileHover={{ y: -2 }}
                   whileTap={{ scale: 0.98 }}
-                  disabled={phase !== "idle"}
+                  disabled={p.sample || phase !== "idle"}
                   onClick={() => setChoice(c)}
                   className={`relative flex h-40 flex-col items-center justify-center gap-3  border text-2xl font-semibold transition ${
                     active
@@ -124,18 +144,18 @@ export default function VoteClient(p: Props) {
           </div>
           <div className="mt-4 flex items-start gap-2.5 border border-ink bg-white p-3.5 text-xs leading-relaxed text-muted">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-signal-ink" />
-            Your vote and weight are encrypted (Arcium MPC). Results revealed when voting closes.
+            Votes are currently recorded by the Harvestia API and tallied when voting closes. Encrypted voting (Arcium MPC) is in development.
           </div>
           <button
             onClick={cast}
-            disabled={!choice || phase !== "idle"}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 bg-ink text-paper py-3 text-sm font-semibold text-ink transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={p.sample || !choice || phase !== "idle"}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 bg-ink py-3 text-sm font-semibold text-paper transition hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={phase} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="inline-flex items-center gap-2">
-                {phase === "idle" && <><ShieldCheck className="h-4 w-4" /> Cast encrypted vote</>}
-                {phase === "encrypting" && <><Loader2 className="h-4 w-4 animate-spin" /> Encrypting & generating nullifier…</>}
-                {phase === "cast" && <><ShieldCheck className="h-4 w-4" /> Vote sealed — thank you</>}
+                {phase === "idle" && (p.sample ? <>Sample campaign — voting disabled</> : <><ShieldCheck className="h-4 w-4" /> Cast vote</>)}
+                {phase === "encrypting" && <><Loader2 className="h-4 w-4 animate-spin" /> Submitting vote…</>}
+                {phase === "cast" && <><ShieldCheck className="h-4 w-4" /> Vote recorded — thank you</>}
               </motion.span>
             </AnimatePresence>
           </button>
@@ -184,7 +204,7 @@ export default function VoteClient(p: Props) {
             <div className="absolute -top-1 h-4.5 w-0.5 bg-navy" style={{ left: `${reqPos}%` }} />
           </div>
           <p className="mt-3 text-xs text-muted">
-            Only participation % is visible. Yes/No split and individual weights stay sealed until close. Max 10% weight per voter.
+            Only participation % is shown until close. Max 10% weight per voter.
           </p>
         </Card>
 
@@ -193,8 +213,8 @@ export default function VoteClient(p: Props) {
             <Cpu className="h-4 w-4" />
           </span>
           <div className="text-xs leading-relaxed text-muted">
-            <div className="mb-0.5 text-sm font-medium text-ink">{p.campaignName} · tallied in MPC</div>
-            One-vote nullifier via ZK. Weight derived from your shielded stake — never revealed on-chain.
+            <div className="mb-0.5 text-sm font-medium text-ink">{p.campaignName} · private tally coming</div>
+            Planned: one vote per position via ZK nullifier and weights tallied in Arcium MPC. Not live yet — today weight is your verified stake.
           </div>
         </Card>
       </div>

@@ -19,6 +19,12 @@ async function FounderContent() {
         title="Founder dashboard"
         subtitle="Any startup — business, brand, SaaS or crypto. Launch a milestone raise, choose what investors get, prove progress, and pay back in public."
       />
+      {c?.sample && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 border-2 border-ink bg-signal/15 px-4 py-3 text-xs text-ink">
+          <span className="stamp bg-signal text-ink !border-ink">Sample</span>
+          The evidence, spending, payout and token tools below are previewed on the fictional sample campaigns ({[c.name, tokenCampaign?.name].filter(Boolean).join(", ")}). Once your own campaign is live they act on it instead.
+        </div>
+      )}
       <FounderClient campaignId={c?.id ?? "ferrolab"} campaignName={c?.name ?? "Ferrolab"} milestones={milestones} />
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         {c && <FounderPayouts campaignId={c.id} campaignName={c.name} offering={c.offering} only="equity" nextPeriod={nextPeriod} />}

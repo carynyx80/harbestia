@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { Plus, ArrowRight, ArrowUpRight } from "lucide-react";
 import { SectionHead, Serif } from "@/components/ui/reveal";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,9 @@ export function Marquee() {
   const row = [...ticker, ...ticker, ...ticker, ...ticker, ...ticker, ...ticker];
   const infra = ["Solana", "USDC", "Solscan-auditable treasury", "Helius Privacy Rings (in development)", "Arcium (planned)", "ZK proofs (planned)"];
   return (
-    <section aria-label="Live campaign ticker" className="border-y-2 border-ink bg-ink text-paper">
+    <section aria-label="Sample campaign ticker" className="border-y-2 border-ink bg-ink text-paper">
       <div className="flex">
-        <div className="z-10 shrink-0 bg-signal px-3 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink">Live</div>
+        <div className="z-10 shrink-0 bg-signal px-3 py-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-ink">Sample</div>
         <div className="relative overflow-hidden">
           <div className="animate-marquee flex w-max">
             {row.map((t, i) => (
@@ -179,13 +180,13 @@ const campaigns = [
 
 export function Campaigns() {
   return (
-    <section id="founders" className="px-4 py-20 sm:py-28">
-      <SectionHead num="06" eyebrow="Featured campaigns" title={<>Founders raising <Serif>right now.</Serif></>} />
+    <section id="campaigns" className="px-4 py-20 sm:py-28">
+      <SectionHead num="06" eyebrow="Sample campaigns" title={<>Two campaigns, <Serif>end to end.</Serif></>} sub="Fictional samples that show every stage: Zentrove is still raising, Ferrolab is funded and voting on its second milestone. Investing is disabled on both." />
       <div className="mx-auto mt-14 grid max-w-6xl border-2 border-ink md:grid-cols-2">
         {campaigns.map((c, k) => (
-          <a key={c.id} href={`/app/campaign/${c.id}`} className={`group block ${k > 0 ? "border-t-2 border-ink md:border-l-2 md:border-t-0" : ""}`}>
+          <Link key={c.id} href={`/app/campaign/${c.id}`} className={`group block ${k > 0 ? "border-t-2 border-ink md:border-l-2 md:border-t-0" : ""}`}>
             <figure className="border-b-2 border-ink">
-              <div className="relative h-52 overflow-hidden">
+              <div className="relative aspect-[16/9] overflow-hidden">
                 <img src={c.img} alt={`${c.n} cover art`} className="photo h-full w-full object-cover" />
                 <span className="stamp absolute left-3 top-3 bg-paper text-ink">{c.e}</span>
                 <span className="stamp absolute right-3 top-3 bg-signal text-ink !border-ink">Sample</span>
@@ -199,7 +200,7 @@ export function Campaigns() {
               <div className="mt-2 flex justify-between font-mono text-xs uppercase tracking-[0.06em]"><span className="font-semibold tabular">{c.r}% funded</span><span className="text-muted">Goal {c.g}</span></div>
               <p className="mt-4 border-t border-rule pt-3 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">Sample campaign for demonstration — not a live raise.</p>
             </div>
-          </a>
+          </Link>
         ))}
       </div>
     </section>
@@ -212,14 +213,14 @@ const payback = [
     t: "Equity + monthly payouts",
     stamp: "EQUITY · PAYOUTS",
     d: "You own a slice of the company. Every month the founder pays a fixed share of revenue or profit to investors from the treasury, with a public report. Late months get a public LATE stamp.",
-    ex: "e.g. 10% of the company, 8% of monthly revenue paid out",
+    ex: "e.g. Ferrolab: 12% equity, 7% of monthly revenue paid out",
   },
   {
     k: "B",
     t: "Token",
     stamp: "TOKEN",
-    d: "For crypto projects. A fixed share of the token supply is reserved for investors and vests month by month after launch. Miss the launch date by six months and the campaign is flagged overdue.",
-    ex: "e.g. 15% of 100M $GRID, 12-month vesting",
+    d: "For crypto projects. A fixed share of the token supply is reserved for investors and vests month by month after launch. Miss the target launch date by six months and the campaign is flagged overdue.",
+    ex: "e.g. Zentrove: 15% of 1B ZTRV, 3-month cliff, 12-month vesting",
   },
   {
     k: "C",
@@ -252,14 +253,14 @@ export function PayBack() {
 }
 
 const faqs = [
-  ["Who can raise on Harvestia?", "Any startup: a local business, a consumer brand, a SaaS company, hardware, creators, or a crypto project. Founders are public and KYC-verified; investor privacy is in development."],
+  ["Who can raise on Harvestia?", "Any startup: a local business, a consumer brand, a SaaS company, hardware, creators, or a crypto project. Founders are public and accountable; investor privacy is in development."],
   ["What do investors actually get?", "The founder chooses: equity with monthly payouts (a set share of revenue or profit, paid every month), a token allocation that vests after launch, or both. The terms are shown on every campaign page."],
-  ["How do monthly payouts work?", "Each month the founder pays the payout in USDC with a public report, and the company distributes your pro-rata share from the treasury. A missed month is marked LATE; three in a row flags the campaign and opens an extra exit vote."],
+  ["How do monthly payouts work?", "Each month the founder deposits the payout in USDC with a public report, and the company distributes your pro-rata share from the treasury. A missed month is marked LATE; three in a row flags the campaign and opens an extra exit vote."],
   ["Is my investment private?", "Not yet. Today your USDC transfer to the treasury wallet is a normal mainnet transfer, visible on-chain. We are integrating Helius Privacy Rings, with Arcium and ZK proofs to follow; none of these are live yet. \"Invest invisible\" is where we are headed, not where we are today."],
   ["Who holds my money?", "Harvestia does. Your USDC goes to the Harvestia treasury wallet (DtvU…3Scx), a public address anyone can audit on Solscan. There is no custom on-chain program: the company releases funds to founders after investor votes and sends refunds when milestones are missed. This is custodial."],
   ["What happens if Harvestia disappears?", "Honest answer: funds in the treasury are controlled by the company's key, so you depend on the company to release or refund them. Every balance and transfer is public on Solscan, so the funds can always be checked, but code does not force a refund. We plan to move the treasury to a multisig with independent signers to reduce this risk."],
   ["What happens if a founder misses a milestone?", "Investors vote No. Founders get one 30-day resubmission. If it fails again, the company refunds all remaining funds from the treasury pro-rata."],
-  ["Do I need KYC?", "Yes, once. Founders never see who you are. A TEE-sealed vault and reusable ZK credential are planned but not live yet."],
+  ["Do I need KYC?", "Today you invest by connecting a Solana wallet and signing a USDC transfer. A one-time KYC check with a TEE-sealed document vault and a reusable ZK credential is planned but not live yet; when it ships, founders will not see who you are."],
   ["Can I exit early?", "During the 7-day window after each vote you can request your pro-rata share of unreleased funds; the company refunds it from the treasury and your shares are burned."],
   ["What does Harvestia charge?", "A 5% success fee on completed raises. Nothing for investors."],
 ];
@@ -267,7 +268,7 @@ const faqs = [
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section className="px-4 py-20 sm:py-28">
+    <section id="faq" className="px-4 py-20 sm:py-28">
       <SectionHead num="07" eyebrow="FAQ" title={<>Questions, <Serif>answered.</Serif></>} />
       <div className="mx-auto mt-14 max-w-6xl border-t-2 border-ink">
         {faqs.map(([q, a], k) => (
@@ -294,7 +295,7 @@ export function CTA() {
           <h2 className="w-cond mt-6 text-5xl font-black uppercase leading-[0.88] sm:text-7xl">Plant capital. Harvest quietly.</h2>
           <p className="mt-6 max-w-md text-ink">Join the launchpad where accountability is public, the treasury is auditable, and investor privacy is on the way.</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button href="/app" variant="ghost" className="bg-ink !text-paper hover:!bg-paper hover:!text-ink">Launch app <ArrowRight size={15} /></Button>
+            <Button href="/app" variant="ghost" className="!bg-ink !text-paper hover:!bg-paper hover:!text-ink">Launch app <ArrowRight size={15} /></Button>
             <Button href="/app/founder" variant="ghost">Start a raise</Button>
           </div>
         </div>
@@ -309,15 +310,15 @@ export function CTA() {
 export function Footer() {
   return (
     <footer className="border-t-2 border-ink px-4 py-10">
-      <div className="mx-auto grid max-w-6xl gap-6 sm:grid-cols-3 sm:items-end">
+      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-3 lg:items-end">
         <div>
           <div className="w-wide display text-2xl font-black uppercase">Harvestia</div>
           <p className="mt-1 font-mono text-xs uppercase tracking-[0.08em] text-muted">Pitch in public. Invest invisible.</p>
         </div>
-        <div className="flex flex-wrap gap-6 font-mono text-xs uppercase tracking-[0.08em]">
-          <a href="#how" className="ul-hover">How it works</a><a href="#privacy" className="ul-hover">Privacy</a><a href="/app" className="ul-hover">App</a>
+        <div className="flex flex-wrap gap-x-6 gap-y-3 font-mono text-xs uppercase tracking-[0.08em]">
+          <a href="#how" className="ul-hover">How it works</a><a href="#treasury" className="ul-hover">Treasury</a><a href="#privacy" className="ul-hover">Privacy</a><a href="#campaigns" className="ul-hover">Campaigns</a><a href="#faq" className="ul-hover">FAQ</a><Link href="/app" className="ul-hover">Launch app</Link><Link href="/app/founder" className="ul-hover">Start a raise</Link>
         </div>
-        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted sm:text-right">© 2026 Harvestia · Built on Solana</p>
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted lg:text-right">© 2026 Harvestia · Built on Solana</p>
       </div>
     </footer>
   );

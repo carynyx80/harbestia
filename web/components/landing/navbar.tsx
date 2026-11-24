@@ -4,7 +4,7 @@ import { Logo } from "@/components/ui/logo";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 
-const links = [["Shark Tank", "#shark-tank"], ["How it works", "#how"], ["Protection", "#protection"], ["Privacy", "#privacy"], ["For founders", "#founders"]];
+const links = [["Shark Tank", "#shark-tank"], ["How it works", "#how"], ["Protection", "#protection"], ["Privacy", "#privacy"], ["Campaigns", "#campaigns"], ["FAQ", "#faq"]];
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -23,7 +23,7 @@ export function Navbar() {
         </div>
         <div className="flex items-center gap-2">
           <Link href="/app" className="border-2 border-ink bg-signal px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-ink transition-colors hover:bg-ink hover:text-paper">Launch app</Link>
-          <button aria-label="Menu" onClick={() => setOpen(!open)} className="grid h-10 w-10 place-items-center border-2 border-ink md:hidden">{open ? <X size={18} /> : <Menu size={18} />}</button>
+          <button aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)} className="grid h-10 w-10 place-items-center border-2 border-ink md:hidden">{open ? <X size={18} /> : <Menu size={18} />}</button>
         </div>
       </nav>
       {open && (

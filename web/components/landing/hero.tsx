@@ -24,11 +24,11 @@ export function Hero() {
         <div className="mt-10 grid gap-10 border-t-2 border-ink pt-8 lg:grid-cols-12">
           <div className="lg:col-span-6">
             <p className="max-w-lg text-lg leading-relaxed">
-              <span className="float-left mr-2 mt-1 font-mono text-5xl font-bold leading-[0.8]">F</span>ounders of any startup — a local business, a consumer brand, SaaS or a crypto project — pitch in public. You back them for equity with monthly revenue payouts, a token allocation, or both, with a privacy layer coming via Helius Privacy Rings. Your USDC goes to the Harvestia treasury wallet — a public address anyone can audit — and is released to founders milestone by milestone after investors vote. Miss one? The company refunds you.
+              <span className="float-left mr-2 mt-1 font-mono text-5xl font-bold leading-[0.8]">F</span>ounders of any startup — a local business, a consumer brand, SaaS or a crypto project — pitch in public. You back them for equity with monthly revenue payouts, a token allocation, or both, with a privacy layer coming via Helius Privacy Rings. Your USDC goes to the Harvestia treasury wallet — a public address anyone can audit — and is released to founders milestone by milestone after investors vote. Miss one, and the company refunds what is left.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button href="/app">Explore campaigns <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" /></Button>
-              <Button href="#founders" variant="ghost">Raise as a founder</Button>
+              <Button href="/app/founder" variant="ghost">Raise as a founder</Button>
             </div>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs uppercase tracking-[0.08em]">
               <span className="flex items-center gap-2"><Lock size={14} /> Privacy layer in development</span>
@@ -51,7 +51,7 @@ function TermSheet() {
       </header>
       <div className="grid grid-cols-[120px_1fr] border-b border-ink sm:grid-cols-[160px_1fr]">
         <figure className="group relative border-r border-ink">
-          <img src="/startups/ferrolab-cover.png" alt="Ferrolab cover art" className="photo h-full min-h-[120px] w-full object-cover" />
+          <img src="/startups/ferrolab-cover.png" alt="Ferrolab cover art" className="photo h-full min-h-[120px] w-full object-cover object-left" />
         </figure>
         <div className="p-4">
           <div className="w-cond display text-3xl font-black uppercase leading-none">Ferrolab</div>

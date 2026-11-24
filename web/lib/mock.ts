@@ -73,6 +73,8 @@ export interface Campaign {
   useOfFunds: UseOfFunds[];
   goalUsdc: number;
   raisedUsdc: number;
+  /** Number of investors (public count). */
+  investorCount?: number;
   equityBps: number;
   upfrontBps: number;
   raiseDeadline: string;
@@ -165,6 +167,7 @@ const baseCampaigns: BaseCampaign[] = [
     ],
     goalUsdc: 750_000,
     raisedUsdc: 286_000,
+    investorCount: 41,
     equityBps: 0,
     upfrontBps: 2000,
     raiseDeadline: days(21),
@@ -252,6 +255,7 @@ const baseCampaigns: BaseCampaign[] = [
     ],
     goalUsdc: 500_000,
     raisedUsdc: 500_000,
+    investorCount: 63,
     equityBps: 1200,
     upfrontBps: 2000,
     raiseDeadline: days(-130),

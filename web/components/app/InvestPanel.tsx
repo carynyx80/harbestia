@@ -14,7 +14,7 @@ import TreasuryInvest from "./TreasuryInvest";
 
 const STEPS: { key: DepositStep; label: string }[] = [
   { key: "register", label: "Registering" },
-  { key: "build", label: "Building encrypted deposit" },
+  { key: "build", label: "Building deposit" },
   { key: "sign", label: "Sign in wallet" },
   { key: "confirm", label: "Confirming" },
   { key: "record", label: "Recorded" },
@@ -89,7 +89,7 @@ export default function InvestPanel({
   };
 
   const invest = async () => {
-    if (!n) return;
+    if (!n || sample || status !== "Raising") return;
     setError(null);
     setTxSig(null);
     setStep(null);
@@ -213,7 +213,7 @@ export default function InvestPanel({
           })}
         </ol>
       )}
-      <button onClick={invest} disabled={state !== "idle" || needsWallet} className={`${btnPrimary} mt-4 w-full py-3`}>
+      <button onClick={invest} disabled={sample || status !== "Raising" || state !== "idle" || needsWallet} className={`${btnPrimary} mt-4 w-full py-3`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={state}
@@ -222,24 +222,25 @@ export default function InvestPanel({
             exit={{ opacity: 0, y: -6 }}
             className="inline-flex items-center gap-2"
           >
-            {state === "idle" && needsWallet && (
+            {state === "idle" && sample && <>Sample campaign — investing disabled</>}
+            {state === "idle" && !sample && needsWallet && (
               <>
                 <Wallet className="h-4 w-4" /> Connect wallet to invest
               </>
             )}
-            {state === "idle" && !needsWallet && (
+            {state === "idle" && !sample && !needsWallet && (
               <>
-                <ShieldCheck className="h-4 w-4" /> Invest privately
+                <ShieldCheck className="h-4 w-4" /> Invest
               </>
             )}
             {state === "pending" && (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" /> {helius ? `${STEPS.find((x) => x.key === step)?.label ?? "Preparing"}…` : "Generating proof…"}
+                <Loader2 className="h-4 w-4 animate-spin" /> {helius ? `${STEPS.find((x) => x.key === step)?.label ?? "Preparing"}…` : "Submitting…"}
               </>
             )}
             {state === "done" && (
               <>
-                <Check className="h-4 w-4" /> Shielded deposit confirmed
+                <Check className="h-4 w-4" /> Deposit confirmed
               </>
             )}
           </motion.span>
@@ -251,7 +252,7 @@ export default function InvestPanel({
       {error && <p role="alert" className="mt-2 bg-[#B3261E]/10 px-3 py-2 text-xs text-[#B3261E]">{error}</p>}
       {total !== null && (
         <p role="status" className="mt-2 bg-signal/15 px-3 py-2 text-xs text-signal-ink">
-          Deposit sealed. Public total now {fmtUsdFull(total)} (was {fmtUsdFull(prevTotal)}).
+          Deposit recorded. Public total now {fmtUsdFull(total)} (was {fmtUsdFull(prevTotal)}).
         </p>
       )}
       {txSig && (
@@ -264,7 +265,7 @@ export default function InvestPanel({
           Deposit tx {shortAddress(txSig)} ↗
         </a>
       )}
-      {!treasury && <p className="mt-3 text-center text-[11px] text-muted">Requires KYC credential · ZK proof, no documents shared</p>}
+      {!treasury && <p className="mt-3 text-center text-[11px] text-muted">Investor KYC credentials (ZK) are in development</p>}
     </Card>
   );
 }

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { Logo, LogoMark } from "@/components/ui/logo";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import WalletButton from "./WalletButton";
-import { Compass, Wallet, Vote, Rocket, ShieldCheck, Search, Bell, Lock, Landmark } from "lucide-react";
+import { Compass, Wallet, Vote, Rocket, Search, Lock, Landmark } from "lucide-react";
 import { useIsTreasury } from "./WalletProvider";
 
 type NavItem = { href: string; label: string; icon: typeof Compass; badge?: string };
@@ -17,7 +17,7 @@ const nav: NavItem[] = [
   { href: "/app/founder", label: "Founder", icon: Rocket },
 ];
 
-export default function AppShell({ children, pill }: { children: ReactNode; pill?: ReactNode }) {
+export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-paper text-ink antialiased">
       {/* Sidebar */}
@@ -31,10 +31,10 @@ export default function AppShell({ children, pill }: { children: ReactNode; pill
         <div className="mt-auto border-t-2 border-ink">
           <div className="bg-navy p-4 text-paper">
             <div className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em]">
-              <Lock className="h-3.5 w-3.5" /> Privacy layer: preview
+              <Lock className="h-3.5 w-3.5" /> Privacy layer: in development
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-paper/80">
-              Mock encryption for now. Helius Rings, Arcium MPC and ZK proofs are being integrated.
+              Deposits are plain, public USDC transfers today. Helius Privacy Rings, Arcium MPC and ZK proofs are coming.
             </p>
           </div>
         </div>
@@ -46,21 +46,10 @@ export default function AppShell({ children, pill }: { children: ReactNode; pill
           <Link href="/app" className="flex items-center gap-2 md:hidden">
             <LogoMark size={26} />
           </Link>
-          <div className="relative hidden max-w-sm flex-1 sm:block">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              placeholder="Search founders, campaigns…"
-              className="w-full border border-ink bg-white py-2 pl-9 pr-3 font-mono text-sm text-ink placeholder:text-muted outline-none focus:border-signal focus:ring-2 focus:ring-signal/30"
-            />
-          </div>
+          <Suspense fallback={<div className="hidden max-w-sm flex-1 sm:block" />}>
+            <SearchBox />
+          </Suspense>
           <div className="ml-auto flex items-center gap-2.5">
-            {pill}
-            <span className="stamp hidden text-ink sm:inline-flex">
-              <ShieldCheck className="h-3.5 w-3.5" /> Mainnet · USDC
-            </span>
-            <button className="hidden h-9 w-9 place-items-center border-2 border-ink text-ink transition hover:bg-ink hover:text-paper sm:grid">
-              <Bell className="h-4 w-4" />
-            </button>
             <WalletButton />
           </div>
         </div>
@@ -74,6 +63,28 @@ export default function AppShell({ children, pill }: { children: ReactNode; pill
         <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-10">{children}</div>
       </main>
     </div>
+  );
+}
+
+function SearchBox() {
+  const params = useSearchParams();
+  const pathname = usePathname();
+  const q = pathname === "/app" ? params.get("q") ?? "" : "";
+  const kind = pathname === "/app" ? params.get("kind") : null;
+  return (
+    <form action="/app" method="get" role="search" className="relative hidden max-w-sm flex-1 sm:block">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+      {kind && <input type="hidden" name="kind" value={kind} />}
+      <input
+        key={q}
+        type="search"
+        name="q"
+        defaultValue={q}
+        aria-label="Search campaigns"
+        placeholder="Search founders, campaigns…"
+        className="w-full border border-ink bg-white py-2 pl-9 pr-3 font-mono text-sm text-ink placeholder:text-muted outline-none focus:border-signal focus:ring-2 focus:ring-signal/30"
+      />
+    </form>
   );
 }
 
