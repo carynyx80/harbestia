@@ -3,16 +3,16 @@ import { SectionHead, Serif } from "@/components/ui/reveal";
 
 const beats = [
   { step: "The pitch", title: "Founders step into the tank", body: "Any startup pitches in public, from bakeries to blockchains: the product, the ask, the milestones, and the faces behind it. No anon teams." },
-  { step: "The sharks", title: "Investors stay in the dark", body: "Anyone can be a shark. Who you are, how much you put in and how you vote stay encrypted. No whale-watching, no copy-trading." },
-  { step: "The deal", title: "Money moves only when they deliver", body: "Funds sit in a safe on Solana. Each milestone unlocks a slice after a private investor vote. Miss one and the rest comes back to you." },
+  { step: "The sharks", title: "Investors, soon in the dark", body: "Anyone can be a shark. We're building a privacy layer with Helius Privacy Rings so who you are, how much you put in and how you vote stay hidden. Until it ships, USDC transfers are visible on-chain." },
+  { step: "The deal", title: "Money moves only when they deliver", body: "Funds sit in the Harvestia treasury wallet, public on Solscan. After each investor vote, the company releases a slice to the founder. Miss a milestone and the company refunds the rest to you." },
 ];
 
 const rows: [string, boolean, boolean, boolean][] = [
   ["Anyone can invest", false, true, true],
   ["Real ownership in the company", true, false, true],
-  ["Investor identity & amount private", false, false, true],
+  ["Investor privacy (in development)", false, false, true],
   ["Money released only on milestones", false, false, true],
-  ["Automatic refund if founders stall", false, false, true],
+  ["Refunds if founders stall", false, false, true],
   ["Founders public and accountable", true, false, true],
 ];
 
@@ -31,7 +31,7 @@ export function SharkTank() {
         num="01"
         eyebrow="Shark Tank, onchain"
         title={<>Shark Tank for every startup. <Serif>Minus the cameras</Serif> on the sharks.</>}
-        sub="Founders pitch anything they're building. Investors back them privately. And unlike TV, nobody walks away with the money until the work is done."
+        sub="Founders pitch anything they're building. Investors back them in USDC, with a privacy layer on the way. And unlike TV, nobody walks away with the money until the work is done."
       />
 
       <div className="mx-auto mt-14 grid max-w-6xl border-y-2 border-ink md:grid-cols-3">

@@ -57,6 +57,8 @@ export interface Campaign {
   offering?: Offering;
   /** Helius Privacy Rings ring/deposit account for this campaign (helius mode). */
   ringAccount?: string;
+  /** Treasury mode (v4): founder's wallet for milestone releases/upfront payouts (defaults to `founder`). */
+  founderPayoutWallet?: string;
   /** Computed by the API when offering has an equity block. */
   payoutStatus?: PayoutStatus;
   /** Computed by the API when offering has a token block. */

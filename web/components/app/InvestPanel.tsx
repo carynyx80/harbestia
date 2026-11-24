@@ -10,6 +10,7 @@ import { Card, btnPrimary } from "./primitives";
 import { useChainConfig } from "./WalletProvider";
 import { shortAddress } from "@/lib/chain-config";
 import type { DepositStep } from "@/lib/helius-deposit";
+import TreasuryInvest from "./TreasuryInvest";
 
 const STEPS: { key: DepositStep; label: string }[] = [
   { key: "register", label: "Registering" },
@@ -28,6 +29,7 @@ export default function InvestPanel({
   name,
   offering,
   payouts = [],
+  sample = false,
 }: {
   campaignId: string;
   status: string;
@@ -37,6 +39,7 @@ export default function InvestPanel({
   name: string;
   offering?: Offering;
   payouts?: PayoutEntry[];
+  sample?: boolean;
 }) {
   const [amount, setAmount] = useState("2500");
   const [state, setState] = useState<"idle" | "pending" | "done">("idle");
@@ -53,7 +56,8 @@ export default function InvestPanel({
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [prevTotal, setPrevTotal] = useState<number>(raisedUsdc);
-  const { privacyMode, rpcUrl, cluster } = useChainConfig();
+  const { privacyMode, rpcUrl, cluster, mode } = useChainConfig();
+  const treasury = mode === "treasury";
   const helius = privacyMode === "helius";
   const { connection } = useConnection();
   const { publicKey, signMessage, sendTransaction, connected } = useWallet();
@@ -165,6 +169,10 @@ export default function InvestPanel({
           <dd className="text-ink">12 months</dd>
         </div>
       </dl>
+      {treasury ? (
+        <TreasuryInvest campaignId={campaignId} amount={n} sample={sample} closed={status !== "Raising"} />
+      ) : (
+        <>
       {helius ? (
         <div className="mt-4 border border-ink bg-navy p-3 text-xs leading-relaxed text-paper">
           <div className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.1em]">
@@ -237,6 +245,8 @@ export default function InvestPanel({
           </motion.span>
         </AnimatePresence>
       </button>
+        </>
+      )}
       {status !== "Raising" && <p className="mt-2 text-center text-[11px] text-navy">Campaign is {status} — new investments are closed.</p>}
       {error && <p role="alert" className="mt-2 bg-[#B3261E]/10 px-3 py-2 text-xs text-[#B3261E]">{error}</p>}
       {total !== null && (
@@ -254,7 +264,7 @@ export default function InvestPanel({
           Deposit tx {shortAddress(txSig)} ↗
         </a>
       )}
-      <p className="mt-3 text-center text-[11px] text-muted">Requires KYC credential · ZK proof, no documents shared</p>
+      {!treasury && <p className="mt-3 text-center text-[11px] text-muted">Requires KYC credential · ZK proof, no documents shared</p>}
     </Card>
   );
 }

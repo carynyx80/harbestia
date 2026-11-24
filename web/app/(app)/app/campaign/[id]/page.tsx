@@ -6,6 +6,7 @@ import { MapPin, BadgeCheck, ExternalLink, DoorOpen, Lock, Unlock, ArrowLeft, Vo
 import { getCampaign, getPayouts, offeringStamp, fmtUsd, fmtUsdFull, shortKey, type MilestoneStatus } from "@/lib/data";
 import { Card, FadeIn, SectionTitle, StatusChip, ProgressBar } from "@/components/app/primitives";
 import InvestPanel from "@/components/app/InvestPanel";
+import TreasuryCard from "@/components/app/TreasuryCard";
 import OfferingBlocks from "@/components/app/OfferingBlocks";
 
 export async function generateStaticParams() {
@@ -334,7 +335,10 @@ async function CampaignPageContent({ params }: { params: Promise<{ id: string }>
         {/* Sidebar */}
         <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
           <FadeIn delay={0.15}>
-            <InvestPanel campaignId={c.id} status={c.status} raisedUsdc={c.raisedUsdc} equityBps={c.equityBps} goalUsdc={c.goalUsdc} name={c.name} offering={c.offering} payouts={payouts} />
+            <InvestPanel campaignId={c.id} status={c.status} raisedUsdc={c.raisedUsdc} equityBps={c.equityBps} goalUsdc={c.goalUsdc} name={c.name} offering={c.offering} payouts={payouts} sample={!!c.sample} />
+          </FadeIn>
+          <FadeIn delay={0.18}>
+            <TreasuryCard />
           </FadeIn>
           <FadeIn delay={0.2}>
             <Card className="p-5">

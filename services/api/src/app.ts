@@ -7,6 +7,8 @@ import * as R from "./rules.js";
 import { Store, seed } from "./store.js";
 import { loadConfig, redact, type PrivacyConfig } from "./config.js";
 import { HeliusVerifier, type ShieldVerifier } from "./helius.js";
+import { registerRpcProxy } from "./rpc.js";
+import { checkTreasuryDeposit, checkTreasuryPayout, computeAdminActions, deriveAta, RpcTxFetcher, SIG_RE, type RpcFetch, type TxFetcher } from "./treasury.js";
 import { MockArciumClaims, MockArciumSum, MockArciumTally, MockProofVerifier, type ClaimProvider, type ProofVerifier, type SumProvider, type TallyProvider } from "./privacy.js";
 
 export interface AppDeps {
@@ -22,6 +24,12 @@ export interface AppDeps {
   config?: PrivacyConfig;
   /** Shield-tx verifier for helius mode; defaults to a HeliusVerifier on the configured RPC. */
   shieldVerifier?: ShieldVerifier;
+  /** Treasury mode: getTransaction client (defaults to upstream RPC). */
+  txFetcher?: TxFetcher;
+  /** Fetch used by the /rpc proxy (defaults to global fetch). */
+  rpcFetch?: RpcFetch;
+  /** /rpc per-IP limit per minute (default 60). */
+  rpcRateLimit?: number;
 }
 
 const hex = z.string().regex(/^[0-9a-fA-F]{16,128}$/);
@@ -72,6 +80,7 @@ const CreateCampaign = z.object({
   raiseDeadline: isoDate,
   minInvestors: z.number().int().min(1).default(R.DEFAULT_MIN_INVESTORS),
   ringAccount: base58.optional(),
+  founderPayoutWallet: base58.optional(),
   milestones: z.array(z.object({ title: z.string().min(1), description: z.string().min(1), releaseUsdc: z.number().int().positive(), deadline: isoDate })).min(1).max(10),
 }).superRefine((d, ctx) => {
   if (!d.offering) {
@@ -92,6 +101,8 @@ const DepositPayout = z.object({
 const Claim = z.object({ positionCommitment: hex, proof: z.string().min(8).max(16384) });
 const RegisterToken = z.object({ mint: z.string().min(32).max(64), depositAmount: z.number().int().positive(), txSig: z.string().max(128).optional() });
 const HeliusInvest = z.object({ txSignature: z.string().min(64).max(90), commitment: hex, viewKeyHash: hex.optional(), encryptedNote: z.string().max(8192).optional() });
+const TreasuryInvest = z.object({ txSignature: z.string().regex(SIG_RE, "malformed signature") });
+const Settle = z.object({ txSignature: z.string().regex(SIG_RE, "malformed signature") });
 const Invest = z.object({ commitment: hex, ciphertext: z.string().min(8).max(8192), proof: z.string().min(8).max(16384), viewKeyHash: hex.optional(), encryptedNote: z.string().max(8192).optional() });
 const Vote = z.object({ nullifier: hex, encryptedVote: z.string().min(8).max(8192), proof: z.string().min(8).max(16384) });
 const Evidence = z.object({ evidenceUri: z.string().min(3).max(512) });
@@ -137,7 +148,13 @@ export function createApp(deps: AppDeps = {}) {
   const helius = config.privacyMode === "helius";
   const shieldVerifier: ShieldVerifier | undefined = deps.shieldVerifier
     ?? (helius ? new HeliusVerifier({ rpcUrl: config.rpcUrl!, apiKey: config.heliusApiKey, ringProgramId: config.ringProgramId, now }) : undefined);
-  const publicConfig = { privacyMode: config.privacyMode, cluster: config.cluster, ringProgramId: config.ringProgramId };
+  const treasury = config.treasuryMode;
+  const treasuryUsdcAta = deriveAta(config.treasuryWallet, config.usdcMint);
+  const txFetcher: TxFetcher = deps.txFetcher ?? new RpcTxFetcher(config.upstreamRpcUrl, config.heliusApiKey, deps.rpcFetch);
+  const pendingSigs = new Set<string>();
+  const publicConfig = treasury
+    ? { mode: "treasury" as const, cluster: config.cluster, treasuryWallet: config.treasuryWallet, treasuryUsdcAta, usdcMint: config.usdcMint, privacyMode: config.privacyMode, ringProgramId: config.ringProgramId }
+    : { privacyMode: config.privacyMode, cluster: config.cluster, ringProgramId: config.ringProgramId };
   const awaitingWithdrawal = (camp: Campaign, kind: "payout" | "token" | "refund") => ({
     status: "awaiting_onchain_withdrawal", kind, campaignId: camp.id, ...publicConfig, ringAccount: camp.ringAccount ?? null,
     instructions: [
@@ -219,7 +236,46 @@ export function createApp(deps: AppDeps = {}) {
 
   app.get("/config", (c) => c.json(publicConfig));
 
-  app.get("/health", (c) => c.json({ ok: true, service: "harvestia-api", privacyMode: config.privacyMode, cluster: config.cluster, privacyWarning: helius ? HELIUS_PRIVACY_NOTE : MOCK_PRIVACY_BANNER, tally: tallyProvider.name, sum: sum.name, time: new Date(now()).toISOString() }));
+  registerRpcProxy(app, { upstreamUrl: config.upstreamRpcUrl, fetch: deps.rpcFetch, limit: deps.rpcRateLimit, now });
+
+  /** Fetch + verify a tx exactly once (replay-safe across concurrent requests). */
+  const withSignature = async <T>(sig: string, fn: (tx: any) => T & { ok: boolean }): Promise<(T & { ok: boolean }) | { ok: false; reason: string; status: number }> => {
+    if (store.usedSignatures.has(sig) || pendingSigs.has(sig)) return { ok: false, reason: "signature already used", status: 409 };
+    pendingSigs.add(sig);
+    try {
+      let tx;
+      try { tx = await txFetcher.getTransaction(sig); } catch (e) {
+        return { ok: false, reason: redact(`could not verify transaction: ${(e as Error).message}`, config.heliusApiKey), status: 502 };
+      }
+      const r = fn(tx);
+      if (r.ok) store.usedSignatures.add(sig);
+      return r;
+    } finally { pendingSigs.delete(sig); }
+  };
+  const adminActions = () => computeAdminActions({ campaigns: [...store.campaigns.values()], investments: store.treasuryInvestments, payouts: store.payouts, settled: store.settlements, usdcMint: config.usdcMint });
+
+  app.get("/admin/actions", (c) => {
+    if (!treasury) return c.json({ error: "treasury mode is off" }, 404);
+    const actions = adminActions();
+    return c.json({ treasuryWallet: config.treasuryWallet, treasuryUsdcAta, usdcMint: config.usdcMint, cluster: config.cluster, due: actions.filter((a) => a.status === "due"), actions });
+  });
+
+  app.post("/admin/actions/:actionId/settle", async (c) => {
+    if (!treasury) return c.json({ error: "treasury mode is off" }, 404);
+    const actionId = c.req.param("actionId");
+    const action = adminActions().find((a) => a.actionId === actionId);
+    if (!action) return c.json({ error: "action not found" }, 404);
+    if (action.status === "settled") return c.json({ error: "action already settled" }, 409);
+    const p = await parse(c, Settle);
+    if (!p.ok) return p.res;
+    const sig = p.data.txSignature;
+    const r = await withSignature(sig, (tx) => checkTreasuryPayout(tx, { signature: sig, treasuryWallet: config.treasuryWallet, treasuryAta: treasuryUsdcAta, recipientAta: action.recipientAta, usdcMint: config.usdcMint, amountMicro: BigInt(action.amountMicro) }));
+    if (!r.ok) return c.json({ error: `settlement rejected: ${r.reason}` }, "status" in r ? (r.status as 409 | 502) : 400);
+    store.settlements.set(actionId, { txSignature: sig, settledAt: now() });
+    return c.json({ ...action, status: "settled", txSignature: sig, settled: true });
+  });
+
+  app.get("/health", (c) => c.json({ ok: true, service: "harvestia-api", ...(treasury ? { mode: "treasury" } : {}), privacyMode: config.privacyMode, cluster: config.cluster, privacyWarning: helius ? HELIUS_PRIVACY_NOTE : MOCK_PRIVACY_BANNER, tally: tallyProvider.name, sum: sum.name, time: new Date(now()).toISOString() }));
 
   app.get("/campaigns", (c) => c.json([...store.campaigns.values()].map(withRules)));
 
@@ -242,6 +298,7 @@ export function createApp(deps: AppDeps = {}) {
       raiseDeadline: new Date(d.raiseDeadline).toISOString(), minInvestors: d.minInvestors, status: "Draft",
       category: d.category ?? "other",
       ...(d.ringAccount ? { ringAccount: d.ringAccount } : {}),
+      ...(d.founderPayoutWallet ? { founderPayoutWallet: d.founderPayoutWallet } : {}),
       ...(d.offering ? { offering: {
         kind: d.offering.kind,
         ...(d.offering.equity ? { equity: d.offering.equity } : {}),
@@ -270,8 +327,25 @@ export function createApp(deps: AppDeps = {}) {
   app.post("/campaigns/:id/invest", async (c) => {
     const camp = getC(c.req.param("id"));
     if (!camp) return c.json({ error: "campaign not found" }, 404);
+    if (treasury && camp.sample) return c.json({ error: "Sample campaign — investing disabled" }, 403);
     if (camp.status !== "Raising") return c.json({ error: `campaign is ${camp.status}, not Raising` }, 409);
     if (now() > Date.parse(camp.raiseDeadline)) return c.json({ error: "raise deadline passed" }, 409);
+    if (treasury) {
+      const tp = await parse(c, TreasuryInvest);
+      if (!tp.ok) return tp.res;
+      const sig = tp.data.txSignature;
+      const r = await withSignature(sig, (tx) => checkTreasuryDeposit(tx, { signature: sig, campaignId: camp.id, treasuryAta: treasuryUsdcAta, usdcMint: config.usdcMint }));
+      if (!r.ok) return c.json({ error: `deposit rejected: ${r.reason}` }, "status" in r ? (r.status as 409 | 502) : 400);
+      const list = store.treasuryInvestments.get(camp.id) ?? [];
+      const isNew = !list.some((i) => i.investor === r.signer);
+      list.push({ signature: sig, investor: r.signer, amountMicro: r.amountMicro, at: now() });
+      store.treasuryInvestments.set(camp.id, list);
+      camp.raisedUsdc = Math.round((camp.raisedUsdc + r.amountUsdc) * 1e6) / 1e6;
+      sum.seed(camp.id, camp.raisedUsdc);
+      const count = (store.investorCount.get(camp.id) ?? 0) + (isNew ? 1 : 0);
+      store.investorCount.set(camp.id, count);
+      return c.json({ recorded: true, amountUsdc: r.amountUsdc, raisedUsdc: camp.raisedUsdc, investorCount: count, txSignature: sig }, 201);
+    }
     if (helius) {
       if (!camp.ringAccount) return c.json({ error: "campaign has no ringAccount configured for Helius Privacy Rings" }, 409);
       const hp = await parse(c, HeliusInvest);

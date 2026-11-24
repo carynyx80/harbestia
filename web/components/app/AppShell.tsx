@@ -5,9 +5,12 @@ import { Logo, LogoMark } from "@/components/ui/logo";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import WalletButton from "./WalletButton";
-import { Compass, Wallet, Vote, Rocket, ShieldCheck, Search, Bell, Lock } from "lucide-react";
+import { Compass, Wallet, Vote, Rocket, ShieldCheck, Search, Bell, Lock, Landmark } from "lucide-react";
+import { useIsTreasury } from "./WalletProvider";
 
-const nav = [
+type NavItem = { href: string; label: string; icon: typeof Compass; badge?: string };
+const ADMIN_ITEM: NavItem = { href: "/app/admin", label: "Admin", icon: Landmark };
+const nav: NavItem[] = [
   { href: "/app", label: "Explore", icon: Compass },
   { href: "/app/portfolio", label: "Portfolio", icon: Wallet },
   { href: "/app/vote/ferrolab", label: "Votes", icon: Vote, badge: "1" },
@@ -82,11 +85,17 @@ function useIsActive() {
       : pathname.startsWith(href.replace(/\/ferrolab$/, ""));
 }
 
+function useNav() {
+  const isTreasury = useIsTreasury();
+  return isTreasury ? [...nav, ADMIN_ITEM] : nav;
+}
+
 function SidebarNav() {
   const isActive = useIsActive();
+  const items = useNav();
   return (
     <nav className="flex flex-col">
-      {nav.map(({ href, label, icon: Icon, badge }) => {
+      {items.map(({ href, label, icon: Icon, badge }) => {
         const active = isActive(href);
         return (
           <Link
@@ -113,9 +122,10 @@ function SidebarNav() {
 
 function MobileNav() {
   const isActive = useIsActive();
+  const items = useNav();
   return (
     <nav className="flex overflow-x-auto border-t border-ink md:hidden">
-      {nav.map(({ href, label }) => (
+      {items.map(({ href, label }) => (
         <Link
           key={href}
           href={href}

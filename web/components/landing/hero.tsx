@@ -15,7 +15,7 @@ export function Hero() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-ink pb-3 font-mono text-[11px] uppercase tracking-[0.12em]">
           <span className="font-semibold">§00 · Front page</span>
-          <span className="text-muted">Shark Tank for every startup · Private · Solana</span>
+          <span className="text-muted">Shark Tank for every startup · Solana · Privacy layer in development</span>
         </div>
         <h1 className="mt-6 text-[11vw] font-black uppercase leading-[0.85] tracking-[-0.02em] sm:text-[96px] lg:text-[136px]">
           <span className="w-cond block">Pitch in public.</span>
@@ -24,15 +24,15 @@ export function Hero() {
         <div className="mt-10 grid gap-10 border-t-2 border-ink pt-8 lg:grid-cols-12">
           <div className="lg:col-span-6">
             <p className="max-w-lg text-lg leading-relaxed">
-              <span className="float-left mr-2 mt-1 font-mono text-5xl font-bold leading-[0.8]">F</span>ounders of any startup — a local business, a consumer brand, SaaS or a crypto project — pitch in public. You back them for equity with monthly revenue payouts, a token allocation, or both, while your identity, amount and vote stay encrypted. Your money sits in a code-controlled safe and is only released when founders hit milestones you vote on. Miss one? You get refunded.
+              <span className="float-left mr-2 mt-1 font-mono text-5xl font-bold leading-[0.8]">F</span>ounders of any startup — a local business, a consumer brand, SaaS or a crypto project — pitch in public. You back them for equity with monthly revenue payouts, a token allocation, or both, with a privacy layer coming via Helius Privacy Rings. Your USDC goes to the Harvestia treasury wallet — a public address anyone can audit — and is released to founders milestone by milestone after investors vote. Miss one? The company refunds you.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button href="/app">Explore campaigns <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" /></Button>
               <Button href="#founders" variant="ghost">Raise as a founder</Button>
             </div>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs uppercase tracking-[0.08em]">
-              <span className="flex items-center gap-2"><Lock size={14} /> Stake encrypted</span>
-              <span className="flex items-center gap-2"><ShieldCheck size={14} /> Milestone-locked</span>
+              <span className="flex items-center gap-2"><Lock size={14} /> Privacy layer in development</span>
+              <span className="flex items-center gap-2"><ShieldCheck size={14} /> Public, auditable treasury</span>
             </div>
           </div>
           <div className="lg:col-span-6"><TermSheet /></div>
@@ -103,7 +103,7 @@ function TermSheet() {
       </div>
       <footer className="flex items-center justify-between px-4 py-3">
         <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.1em]"><Lock size={13} /> Your stake</span>
-        <span className="flex items-center gap-2 font-mono text-sm"><span className="redact">$00,000</span><span className="text-[11px] uppercase tracking-[0.08em] text-muted">private</span></span>
+        <span className="flex items-center gap-2 font-mono text-sm"><span className="redact">$00,000</span><span className="text-[11px] uppercase tracking-[0.08em] text-muted">private soon</span></span>
       </footer>
       <p className="border-t border-ink px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted">Sample campaign for demonstration — not a live raise.</p>
     </article>

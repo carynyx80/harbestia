@@ -13,7 +13,7 @@ const ticker = [
 
 export function Marquee() {
   const row = [...ticker, ...ticker, ...ticker, ...ticker, ...ticker, ...ticker];
-  const infra = ["Solana", "Helius", "Arcium", "ZK Proofs", "TEE", "Token-2022", "USDC"];
+  const infra = ["Solana", "USDC", "Solscan-auditable treasury", "Helius Privacy Rings (in development)", "Arcium (planned)", "ZK proofs (planned)"];
   return (
     <section aria-label="Live campaign ticker" className="border-y-2 border-ink bg-ink text-paper">
       <div className="flex">
@@ -34,7 +34,7 @@ export function Marquee() {
       </div>
       <div className="border-t border-paper/20 bg-paper text-ink">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.1em]">
-          <span className="text-muted">Built on battle-tested privacy infrastructure:</span>
+          <span className="text-muted">Built on Solana, privacy layer in development:</span>
           {infra.map((t) => <span key={t} className="font-semibold">{t}</span>)}
         </div>
       </div>
@@ -44,9 +44,9 @@ export function Marquee() {
 
 const steps = [
   { t: "Founder lists", d: "A public founder (any startup: business, brand, SaaS or crypto) posts the plan, what investors get and milestones with release amounts." },
-  { t: "You invest privately", d: "Deposit USDC through a shielded pool. Your amount and wallet never appear on-chain." },
-  { t: "Vote on milestones", d: "Founders submit evidence. Investors vote in secret, weighted by hidden stake." },
-  { t: "Release or refund", d: "Yes releases the tranche. Missed milestones return remaining funds pro-rata." },
+  { t: "You invest in USDC", d: "Your USDC goes to the Harvestia treasury wallet — a public address anyone can audit. Transfers are visible on-chain today; private deposits are coming with Helius Privacy Rings." },
+  { t: "Vote on milestones", d: "Founders submit evidence. Investors vote, weighted by stake. Private ballots are coming with the privacy layer." },
+  { t: "Release or refund", d: "On a Yes, the company releases the tranche from the treasury. Missed milestones: the company refunds remaining funds pro-rata." },
 ];
 
 export function HowItWorks() {
@@ -66,23 +66,25 @@ export function HowItWorks() {
   );
 }
 
+const TREASURY = "DtvUDyUhkehQzp1qWKxaCvYQtm6uHU7QMuSiHeLg3Scx";
+
 export function MilestoneSafe() {
   const nodes = [
-    { t: "20% upfront", d: "Released when the raise closes so work can start.", s: "Funded" },
-    { t: "Milestone vote", d: "7-day private vote. 20% quorum, 10% voter cap.", s: "Voting" },
-    { t: "Release", d: "Yes → tranche unlocks. Founder shares vest.", s: "Released" },
-    { t: "or Refund", d: "No twice → remaining funds return to investors.", s: "Refunded" },
+    { t: "20% upfront", d: "Sent by the company from the treasury when the raise closes.", s: "Funded" },
+    { t: "Milestone vote", d: "7-day investor vote. 20% quorum, 10% voter cap.", s: "Voting" },
+    { t: "Release", d: "Yes → the company pays the tranche to the founder.", s: "Released" },
+    { t: "or Refund", d: "No twice → the company refunds remaining funds to investors.", s: "Refunded" },
   ];
   return (
     <section id="protection" className="bg-navy px-4 py-20 text-paper sm:py-28">
       <div className="mx-auto max-w-6xl">
         <div className="flex items-center justify-between border-t-2 border-paper pt-3 font-mono text-[11px] font-semibold uppercase tracking-[0.12em]">
-          <span className="inline-flex items-center gap-3"><span className="bg-paper px-1.5 py-0.5 text-navy">§03</span>Milestone safe</span>
-          <span className="hidden text-paper/70 sm:block">Program-controlled vault</span>
+          <span className="inline-flex items-center gap-3"><span className="bg-paper px-1.5 py-0.5 text-navy">§03</span>Milestone treasury</span>
+          <span className="hidden text-paper/70 sm:block">Company treasury · publicly auditable</span>
         </div>
         <div className="mt-8 grid gap-6 lg:grid-cols-12">
           <h2 className="w-cond text-[40px] font-black uppercase leading-[0.9] sm:text-6xl lg:col-span-8 lg:text-7xl">Your money moves only when <Serif>progress</Serif> does.</h2>
-          <p className="max-w-md self-end border-l border-paper pl-4 leading-relaxed text-paper/80 lg:col-span-4">Funds sit in a program-controlled vault. No founder, no admin, not even us can touch them early.</p>
+          <p className="max-w-md self-end border-l border-paper pl-4 leading-relaxed text-paper/80 lg:col-span-4">Your USDC goes to the Harvestia treasury wallet — a public address anyone can audit. Funds are released to founders milestone by milestone after investors vote, and refunded if milestones are missed. The company executes every release and refund; it is not enforced by code.</p>
         </div>
         <div className="mt-14 grid border-2 border-paper lg:grid-cols-4">
           {nodes.map((n, k) => (
@@ -97,6 +99,19 @@ export function MilestoneSafe() {
             </div>
           ))}
         </div>
+        <div id="treasury" className="mt-14 grid gap-6 border-2 border-paper p-6 sm:p-8 lg:grid-cols-12">
+          <div className="lg:col-span-5">
+            <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em]"><span className="bg-paper px-1.5 py-0.5 text-navy">§03B</span> Where your money sits</span>
+            <h3 className="w-cond mt-5 text-3xl font-black uppercase leading-none sm:text-4xl">One public wallet. <Serif>Audit it yourself.</Serif></h3>
+          </div>
+          <div className="space-y-4 text-sm leading-relaxed text-paper/80 lg:col-span-7">
+            <p>Every investment goes to the Harvestia treasury wallet. Balances and every USDC transfer in and out are public on Solscan.</p>
+            <a href={`https://solscan.io/account/${TREASURY}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 border border-paper px-3 py-2 font-mono text-xs uppercase tracking-[0.08em] text-paper hover:bg-paper hover:text-navy" title={TREASURY}>
+              Treasury {TREASURY.slice(0, 4)}…{TREASURY.slice(-4)} · View on Solscan <ArrowUpRight size={14} />
+            </a>
+            <p className="text-paper/70">Custodial today: the company holds the key and executes releases and refunds after investor votes. We plan to move the treasury to a multisig.</p>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -107,14 +122,14 @@ export function Comparison() {
   const priv = ["Your identity & wallet", "How much you invested", "How you voted", "When you exit"];
   return (
     <section className="px-4 py-20 sm:py-28">
-      <SectionHead num="04" eyebrow="Radical asymmetry" title={<>Public founders. <Serif>Invisible</Serif> investors.</>} />
+      <SectionHead num="04" eyebrow="Radical asymmetry" title={<>Public founders. <Serif>Invisible</Serif> investors.</>} sub="Where we're headed. Investor privacy is in development with Helius Privacy Rings; until it ships, USDC transfers to the treasury are visible on-chain." />
       <div className="mx-auto mt-14 grid max-w-6xl border-2 border-ink md:grid-cols-2">
         <div className="p-6 sm:p-8">
           <div className="flex items-baseline justify-between border-b-2 border-ink pb-3"><h3 className="w-cond text-3xl font-black uppercase">Founders show</h3><span className="stamp">Public</span></div>
           <ul>{pub.map((p) => <li key={p} className="flex items-center justify-between border-b border-rule py-3.5"><span>{p}</span><span className="font-mono text-xs uppercase tracking-[0.08em] text-muted">On record</span></li>)}</ul>
         </div>
         <div className="border-t-2 border-ink bg-ink p-6 text-paper sm:p-8 md:border-l-2 md:border-t-0">
-          <div className="flex items-baseline justify-between border-b-2 border-paper pb-3"><h3 className="w-cond text-3xl font-black uppercase">Investors hide</h3><span className="stamp bg-signal text-ink !border-signal">Sealed</span></div>
+          <div className="flex items-baseline justify-between border-b-2 border-paper pb-3"><h3 className="w-cond text-3xl font-black uppercase">Investors hide</h3><span className="stamp bg-signal text-ink !border-signal">Coming soon</span></div>
           <ul>{priv.map((p) => <li key={p} className="flex items-center justify-between gap-4 border-b border-paper/20 py-3.5"><span className="text-paper/85">{p}</span><span aria-label="redacted" className="font-mono text-sm tracking-[-0.1em] text-paper">██████</span></li>)}</ul>
         </div>
       </div>
@@ -123,17 +138,17 @@ export function Comparison() {
 }
 
 const stack = [
-  { t: "Helius Rings", d: "Deposits, balances and refunds with amounts hidden.", tag: "Amounts" },
-  { t: "Arcium MPC", d: "Weighted vote tallies and pro-rata math computed on encrypted data.", tag: "Votes" },
-  { t: "ZK proofs", d: "KYC credentials, one-vote nullifiers and refund claims without revealing who.", tag: "Identity" },
-  { t: "TEE vault", d: "KYC documents sealed in hardware enclaves with an audit trail for regulators.", tag: "Compliance" },
-  { t: "Shielded pool", d: "Break the link between your public wallet and your position.", tag: "Unlinkability" },
+  { t: "Helius Rings", d: "Being integrated: deposits, balances and refunds with amounts hidden.", tag: "Amounts" },
+  { t: "Arcium MPC", d: "Planned: weighted vote tallies and pro-rata math computed on encrypted data.", tag: "Votes" },
+  { t: "ZK proofs", d: "Planned: KYC credentials, one-vote nullifiers and refund claims without revealing who.", tag: "Identity" },
+  { t: "TEE vault", d: "Planned: KYC documents sealed in hardware enclaves with an audit trail for regulators.", tag: "Compliance" },
+  { t: "Shielded pool", d: "Planned: break the link between your public wallet and your position.", tag: "Unlinkability" },
 ];
 
 export function PrivacyStack() {
   return (
     <section id="privacy" className="px-4 py-20 sm:py-28">
-      <SectionHead num="05" eyebrow="Privacy stack" title={<>Five layers of <Serif>silence.</Serif></>} sub="Every sensitive datum has a cryptographic home. Nothing private ever touches a public ledger in the clear." />
+      <SectionHead num="05" eyebrow="Privacy stack · in development" title={<>Five layers of <Serif>silence.</Serif></>} sub="The privacy layer we are building. None of these layers is live yet: today, USDC transfers to the treasury are visible on-chain. Helius Privacy Rings is being integrated first." />
       <div className="mx-auto mt-14 max-w-6xl overflow-x-auto border-2 border-ink">
         <table className="w-full min-w-[520px] text-left">
           <thead>
@@ -196,7 +211,7 @@ const payback = [
     k: "A",
     t: "Equity + monthly payouts",
     stamp: "EQUITY · PAYOUTS",
-    d: "You own a slice of the company. Every month the founder pays a fixed share of revenue or profit into a public pool, and you claim your cut privately. Late months get a public LATE stamp.",
+    d: "You own a slice of the company. Every month the founder pays a fixed share of revenue or profit to investors from the treasury, with a public report. Late months get a public LATE stamp.",
     ex: "e.g. 10% of the company, 8% of monthly revenue paid out",
   },
   {
@@ -218,7 +233,7 @@ const payback = [
 export function PayBack() {
   return (
     <section id="payback" className="px-4 py-20 sm:py-28">
-      <SectionHead num="02B" eyebrow="Choose how you pay back" title={<>Equity, tokens, <Serif>or both.</Serif></>} sub="Founders pick what investors get. Milestone safe, private votes, refunds and exits work the same for all three." />
+      <SectionHead num="02B" eyebrow="Choose how you pay back" title={<>Equity, tokens, <Serif>or both.</Serif></>} sub="Founders pick what investors get. Treasury custody, milestone votes, refunds and exits work the same for all three." />
       <div className="mx-auto mt-14 grid max-w-6xl border-2 border-ink md:grid-cols-3">
         {payback.map((p, i) => (
           <article key={p.k} className={`flex flex-col p-6 ${i > 0 ? "border-t-2 border-ink md:border-l-2 md:border-t-0" : ""}`}>
@@ -237,13 +252,15 @@ export function PayBack() {
 }
 
 const faqs = [
-  ["Who can raise on Harvestia?", "Any startup: a local business, a consumer brand, a SaaS company, hardware, creators, or a crypto project. Founders are public and KYC-verified; investors stay private."],
+  ["Who can raise on Harvestia?", "Any startup: a local business, a consumer brand, a SaaS company, hardware, creators, or a crypto project. Founders are public and KYC-verified; investor privacy is in development."],
   ["What do investors actually get?", "The founder chooses: equity with monthly payouts (a set share of revenue or profit, paid every month), a token allocation that vests after launch, or both. The terms are shown on every campaign page."],
-  ["How do monthly payouts work?", "Each month the founder deposits the payout in USDC with a public report. You claim your pro-rata share privately. A missed month is marked LATE; three in a row flags the campaign and opens an extra exit vote."],
-  ["Is my investment really private?", "Yes. Amounts move through Helius privacy rings and a shielded pool; votes are tallied by Arcium MPC. Only the public total raised is visible."],
-  ["What happens if a founder misses a milestone?", "Investors vote No. Founders get one 30-day resubmission. If it fails again, all remaining locked funds are refunded pro-rata."],
-  ["Do I need KYC?", "Yes, once. Documents are sealed in a TEE vault and you receive a reusable ZK credential. Founders never see who you are."],
-  ["Can I exit early?", "During the 7-day window after each vote you can withdraw your pro-rata share of locked funds; your shares are burned."],
+  ["How do monthly payouts work?", "Each month the founder pays the payout in USDC with a public report, and the company distributes your pro-rata share from the treasury. A missed month is marked LATE; three in a row flags the campaign and opens an extra exit vote."],
+  ["Is my investment private?", "Not yet. Today your USDC transfer to the treasury wallet is a normal mainnet transfer, visible on-chain. We are integrating Helius Privacy Rings, with Arcium and ZK proofs to follow; none of these are live yet. \"Invest invisible\" is where we are headed, not where we are today."],
+  ["Who holds my money?", "Harvestia does. Your USDC goes to the Harvestia treasury wallet (DtvU…3Scx), a public address anyone can audit on Solscan. There is no custom on-chain program: the company releases funds to founders after investor votes and sends refunds when milestones are missed. This is custodial."],
+  ["What happens if Harvestia disappears?", "Honest answer: funds in the treasury are controlled by the company's key, so you depend on the company to release or refund them. Every balance and transfer is public on Solscan, so the funds can always be checked, but code does not force a refund. We plan to move the treasury to a multisig with independent signers to reduce this risk."],
+  ["What happens if a founder misses a milestone?", "Investors vote No. Founders get one 30-day resubmission. If it fails again, the company refunds all remaining funds from the treasury pro-rata."],
+  ["Do I need KYC?", "Yes, once. Founders never see who you are. A TEE-sealed vault and reusable ZK credential are planned but not live yet."],
+  ["Can I exit early?", "During the 7-day window after each vote you can request your pro-rata share of unreleased funds; the company refunds it from the treasury and your shares are burned."],
   ["What does Harvestia charge?", "A 5% success fee on completed raises. Nothing for investors."],
 ];
 
@@ -275,7 +292,7 @@ export function CTA() {
         <div className="p-6 sm:p-12 lg:col-span-8">
           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em]">§08 · Closing bell</span>
           <h2 className="w-cond mt-6 text-5xl font-black uppercase leading-[0.88] sm:text-7xl">Plant capital. Harvest quietly.</h2>
-          <p className="mt-6 max-w-md text-ink">Join the first private equity launchpad where accountability is public and investors stay invisible.</p>
+          <p className="mt-6 max-w-md text-ink">Join the launchpad where accountability is public, the treasury is auditable, and investor privacy is on the way.</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button href="/app" variant="ghost" className="bg-ink !text-paper hover:!bg-paper hover:!text-ink">Launch app <ArrowRight size={15} /></Button>
             <Button href="/app/founder" variant="ghost">Start a raise</Button>

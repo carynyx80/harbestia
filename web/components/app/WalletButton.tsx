@@ -5,7 +5,21 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { Wallet, LogOut, Loader2, X } from "lucide-react";
 import { shortAddress } from "@/lib/chain-config";
-import { useChainConfig, useWalletError } from "./WalletProvider";
+import { useBalances, useChainConfig, useWalletError } from "./WalletProvider";
+import { baseToUsdc } from "@/lib/treasury";
+
+function isMobileUA() {
+  return typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+function deepLinks() {
+  if (typeof window === "undefined") return null;
+  const url = encodeURIComponent(window.location.href);
+  const ref = encodeURIComponent(window.location.origin);
+  return {
+    phantom: `https://phantom.app/ul/browse/${url}?ref=${ref}`,
+    solflare: `https://solflare.com/ul/v1/browse/${url}?ref=${ref}`,
+  };
+}
 
 const btnBase =
   "inline-flex items-center gap-2 border-2 border-ink px-3 py-2 font-mono text-xs font-semibold transition-colors";
@@ -13,6 +27,8 @@ const btnBase =
 export default function WalletButton() {
   const { wallets, publicKey, connected, connecting, select, disconnect } = useWallet();
   const { cluster } = useChainConfig();
+  const { balances, loading: balLoading } = useBalances();
+  const [mobile] = useState(isMobileUA);
   const [open, setOpen] = useState(false);
   const { error: err, clear } = useWalletError();
   const ref = useRef<HTMLDivElement>(null);
@@ -42,7 +58,14 @@ export default function WalletButton() {
         <span className={`${btnBase} bg-paper text-ink`} title={`${addr} · ${cluster}`}>
           <Wallet className="h-4 w-4" />
           {shortAddress(addr)}
-          <span className="hidden text-[10px] uppercase tracking-[0.08em] text-muted lg:inline">{cluster}</span>
+          <span className="hidden text-[10px] tracking-[0.04em] text-muted sm:inline" aria-live="polite">
+            {balances
+              ? `${(balances.lamports / 1e9).toFixed(3)} SOL · ${baseToUsdc(balances.usdcBase).toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC`
+              : balLoading
+                ? "…"
+                : ""}
+          </span>
+          <span className="hidden text-[10px] uppercase tracking-[0.08em] text-muted lg:inline">{cluster === "mainnet-beta" ? "mainnet" : cluster}</span>
         </span>
         <button
           onClick={() => disconnect().catch(() => undefined)}
@@ -86,9 +109,29 @@ export default function WalletButton() {
             </button>
           </div>
           {detected.length === 0 ? (
-            <p className="px-3 py-3 text-xs leading-relaxed text-muted">
-              No Solana wallet detected. Install Phantom, Solflare or Backpack, then reload.
-            </p>
+            mobile ? (
+              <div className="px-3 py-3 text-xs leading-relaxed text-muted">
+                <p>No wallet in this browser. Open Harvestia inside your wallet app:</p>
+                <div className="mt-2 grid gap-1.5">
+                  {(() => {
+                    const l = deepLinks();
+                    return l ? (
+                      <>
+                        <a href={l.phantom} className={`${btnBase} justify-center bg-paper text-ink hover:bg-ink hover:text-paper`}>Open in Phantom</a>
+                        <a href={l.solflare} className={`${btnBase} justify-center bg-paper text-ink hover:bg-ink hover:text-paper`}>Open in Solflare</a>
+                      </>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+            ) : (
+              <p className="px-3 py-3 text-xs leading-relaxed text-muted">
+                No Solana wallet detected. Install{" "}
+                <a className="underline" href="https://phantom.app/download" target="_blank" rel="noreferrer">Phantom</a>,{" "}
+                <a className="underline" href="https://solflare.com/download" target="_blank" rel="noreferrer">Solflare</a> or{" "}
+                <a className="underline" href="https://backpack.app/download" target="_blank" rel="noreferrer">Backpack</a>, then reload.
+              </p>
+            )
           ) : (
             <ul>
               {detected.map((w) => (

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Campaign, Milestone, PortfolioEntry, VoteRound } from "@harvestia/sdk/types";
 import { DAY_MS, VOTE_WINDOW_MS, accruePayout, payoutAmountUsdc, payoutPeriod, toMicro } from "./rules.js";
 import type { SealedBallot } from "./privacy.js";
+import type { Settlement, TreasuryInvestment } from "./treasury.js";
 
 export interface RoundRecord extends VoteRound {
   ballotsSealed: SealedBallot[];
@@ -30,6 +31,13 @@ export class Store {
     list.sort((a, b) => a.period - b.period);
     this.payouts.set(campaignId, list);
   }
+
+  /** Treasury mode (v4): verified USDC deposits per campaign (signer pubkey + amount). */
+  treasuryInvestments = new Map<string, TreasuryInvestment[]>();
+  /** Every tx signature accepted (deposits and settlements) — replay protection. */
+  usedSignatures = new Set<string>();
+  /** actionId -> settlement. */
+  settlements = new Map<string, Settlement>();
 
   campaigns = new Map<string, Campaign>();
   investorCount = new Map<string, number>();
