@@ -1,0 +1,18 @@
+{
+  "name": "harvestia-deploy-scripts",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "init-config": "tsx init-config.ts",
+    "verify": "tsx verify.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@solana/spl-token": "0.4.9",
+    "@solana/web3.js": "1.98.0"
+  },
+  "devDependencies": {
+    "tsx": "4.19.2",
+    "typescript": "5.6.3"
+  }
+}

@@ -27,10 +27,21 @@ pub const SHARE_DECIMALS: u8 = 6;
 pub mod harvestia {
     use super::*;
 
-    pub fn initialize_config(ctx: Context<InitializeConfig>, fee_bps: u16, reviewer: Pubkey) -> Result<()> {
+    /// Any funded deployer (`payer`) can initialize; `admin`/`reviewer` are
+    /// plain args so the company wallet never has to sign at deploy time.
+    /// Treasury must be a USDC account owned by `admin`.
+    pub fn initialize_config(ctx: Context<InitializeConfig>, admin: Pubkey, reviewer: Pubkey, fee_bps: u16) -> Result<()> {
         logic::validate_config(fee_bps).map_err(err)?;
+        logic::validate_admin(&admin.to_bytes()).map_err(err)?;
+        logic::validate_admin(&reviewer.to_bytes()).map_err(err)?;
+        logic::validate_treasury(
+            &ctx.accounts.treasury.mint.to_bytes(),
+            &ctx.accounts.treasury.owner.to_bytes(),
+            &ctx.accounts.usdc_mint.key().to_bytes(),
+            &admin.to_bytes(),
+        ).map_err(err)?;
         let c = &mut ctx.accounts.config;
-        c.admin = ctx.accounts.admin.key();
+        c.admin = admin;
         c.reviewer = reviewer;
         c.usdc_mint = ctx.accounts.usdc_mint.key();
         c.treasury = ctx.accounts.treasury.key();
@@ -38,6 +49,17 @@ pub mod harvestia {
         c.campaign_count = 0;
         c.bump = ctx.bumps.config;
         emit!(ConfigInitialized { admin: c.admin, reviewer, fee_bps });
+        Ok(())
+    }
+
+    /// Rotate the admin (e.g. company hot wallet -> Squads multisig vault).
+    /// Signed by the CURRENT admin. Treasury is left unchanged.
+    pub fn transfer_admin(ctx: Context<TransferAdmin>, new_admin: Pubkey) -> Result<()> {
+        logic::validate_admin(&new_admin.to_bytes()).map_err(err)?;
+        let c = &mut ctx.accounts.config;
+        let old_admin = c.admin;
+        c.admin = new_admin;
+        emit!(AdminTransferred { old_admin, new_admin });
         Ok(())
     }
 
@@ -937,13 +959,20 @@ pub struct OfferingArg {
 #[derive(Accounts)]
 pub struct InitializeConfig<'info> {
     #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(init, payer = admin, space = 8 + Config::INIT_SPACE, seeds = [b"config"], bump)]
+    pub payer: Signer<'info>,
+    #[account(init, payer = payer, space = 8 + Config::INIT_SPACE, seeds = [b"config"], bump)]
     pub config: Account<'info, Config>,
     pub usdc_mint: InterfaceAccount<'info, Mint>,
     #[account(token::mint = usdc_mint)]
     pub treasury: InterfaceAccount<'info, TokenAccount>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TransferAdmin<'info> {
+    pub admin: Signer<'info>,
+    #[account(mut, seeds = [b"config"], bump = config.bump, has_one = admin)]
+    pub config: Account<'info, Config>,
 }
 
 #[derive(Accounts)]
@@ -979,7 +1008,7 @@ pub struct CreateCampaign<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub const HOOK_PROGRAM_ID: Pubkey = pubkey!("E4FBHHmJeDwVdEs2w9GhRSPDdFfV1EtXnCv3cFHSFQwU");
+pub const HOOK_PROGRAM_ID: Pubkey = pubkey!("ED26KMhQDKqF3UXH1tSemGwj5rB6n7nKH46jkQY8vQDG"); // == harvestia_hook declare_id / target/deploy keypair
 
 #[derive(Accounts)]
 pub struct AdminCampaign<'info> {
@@ -1250,6 +1279,7 @@ pub struct ClaimTokens<'info> {
 // ------------------------------------------------------------------ events
 
 #[event] pub struct ConfigInitialized { pub admin: Pubkey, pub reviewer: Pubkey, pub fee_bps: u16 }
+#[event] pub struct AdminTransferred { pub old_admin: Pubkey, pub new_admin: Pubkey }
 #[event] pub struct CampaignCreated { pub campaign: Pubkey, pub founder: Pubkey, pub goal: u64, pub equity_bps: u16, pub category: u8, pub offering_kind: u8 }
 #[event] pub struct PayoutDeposited { pub campaign: Pubkey, pub period: u32, pub gross_amount: u64, pub amount: u64, pub status: u8, pub late_streak: u8 }
 #[event] pub struct PayoutMarkedLate { pub campaign: Pubkey, pub period: u32, pub late_streak: u8, pub payout_default: bool }
@@ -1321,6 +1351,8 @@ pub enum HarvestiaError {
     #[msg("token already registered")] TokenAlreadyRegistered,
     #[msg("token not registered")] TokenNotRegistered,
     #[msg("nothing to claim")] NothingToClaim,
+    #[msg("treasury must be the admin's USDC token account")] InvalidTreasury,
+    #[msg("invalid admin / reviewer key")] InvalidAdmin,
 }
 
 impl From<LogicError> for HarvestiaError {
@@ -1368,6 +1400,8 @@ impl From<LogicError> for HarvestiaError {
             L::AlreadyPaid => H::AlreadyPaid,
             L::NoShares => H::NoShares,
             L::TokenAlreadyRegistered => H::TokenAlreadyRegistered,
+            L::InvalidTreasury => H::InvalidTreasury,
+            L::InvalidAdmin => H::InvalidAdmin,
             L::TokenNotRegistered => H::TokenNotRegistered,
             L::NothingToClaim => H::NothingToClaim,
         }

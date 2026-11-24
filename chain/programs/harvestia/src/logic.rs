@@ -73,6 +73,9 @@ pub enum LogicError {
     AlreadyPaid,
     NoShares,
     TokenAlreadyRegistered,
+    // ---- Config / admin
+    InvalidTreasury,
+    InvalidAdmin,
     TokenNotRegistered,
     NothingToClaim,
 }
@@ -175,6 +178,24 @@ pub fn in_window(now: i64, start: i64, end: i64) -> bool {
 pub fn validate_config(fee_bps: u16) -> LResult<()> {
     if fee_bps > MAX_FEE_BPS {
         return Err(LogicError::InvalidFee);
+    }
+    Ok(())
+}
+
+/// Admin / reviewer keys are passed as instruction args (the deployer pays,
+/// the company wallet never signs at deploy time). Reject the all-zero key.
+pub fn validate_admin<K: PartialEq + Default>(admin: &K) -> LResult<()> {
+    if *admin == K::default() {
+        return Err(LogicError::InvalidAdmin);
+    }
+    Ok(())
+}
+
+/// Treasury must be a USDC token account OWNED BY the admin, so the success
+/// fee can only ever flow to the company wallet.
+pub fn validate_treasury<K: PartialEq>(treasury_mint: &K, treasury_owner: &K, usdc_mint: &K, admin: &K) -> LResult<()> {
+    if treasury_mint != usdc_mint || treasury_owner != admin {
+        return Err(LogicError::InvalidTreasury);
     }
     Ok(())
 }
@@ -1039,6 +1060,19 @@ mod tests {
     fn config_fee_bounds() {
         assert!(validate_config(DEFAULT_FEE_BPS).is_ok());
         assert_eq!(validate_config(MAX_FEE_BPS + 1), Err(LogicError::InvalidFee));
+    }
+
+    #[test]
+    fn config_admin_and_treasury() {
+        let (usdc, other_mint, company, deployer) = ([1u8; 32], [2u8; 32], [3u8; 32], [4u8; 32]);
+        assert!(validate_admin(&company).is_ok());
+        assert_eq!(validate_admin(&[0u8; 32]), Err(LogicError::InvalidAdmin));
+        // company's USDC account: ok
+        assert!(validate_treasury(&usdc, &company, &usdc, &company).is_ok());
+        // wrong mint
+        assert_eq!(validate_treasury(&other_mint, &company, &usdc, &company), Err(LogicError::InvalidTreasury));
+        // owned by the deployer, not the company: fees could be diverted -> reject
+        assert_eq!(validate_treasury(&usdc, &deployer, &usdc, &company), Err(LogicError::InvalidTreasury));
     }
 
     #[test]
