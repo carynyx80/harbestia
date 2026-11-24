@@ -23,7 +23,7 @@ async function ExploreContent({ searchParams }: { searchParams: Promise<{ kind?:
     <>
       <PageHeader
         title="Explore campaigns"
-        subtitle="Public founders, accountable milestones. Your identity, amount and vote stay invisible."
+        subtitle="Public founders, accountable milestones. Funds held in a public, auditable treasury."
         right={
           <div className="flex gap-6 text-right">
             <div>
@@ -116,7 +116,7 @@ async function ExploreContent({ searchParams }: { searchParams: Promise<{ kind?:
                       <Flag className="h-3.5 w-3.5" /> {c.milestones.length} milestones
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <EyeOff className="h-3.5 w-3.5 text-navy" /> Investors: private
+                      <EyeOff className="h-3.5 w-3.5 text-navy" /> Privacy: in development
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5" /> {c.status === "Raising" ? `${daysLeft}d` : "Funded"}

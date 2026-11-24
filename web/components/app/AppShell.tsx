@@ -56,7 +56,7 @@ export default function AppShell({ children, pill }: { children: ReactNode; pill
           <div className="ml-auto flex items-center gap-2.5">
             {pill}
             <span className="stamp hidden text-ink sm:inline-flex">
-              <ShieldCheck className="h-3.5 w-3.5" /> Verified · ZK
+              <ShieldCheck className="h-3.5 w-3.5" /> Mainnet · USDC
             </span>
             <button className="hidden h-9 w-9 place-items-center border-2 border-ink text-ink transition hover:bg-ink hover:text-paper sm:grid">
               <Bell className="h-4 w-4" />
